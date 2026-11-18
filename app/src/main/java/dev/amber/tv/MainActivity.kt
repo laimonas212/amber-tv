@@ -401,7 +401,7 @@ private fun WallpaperLibraryScreen(
                             Column(Modifier.weight(1f).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 val icon = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
                                 Image(icon, app.label, Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)), contentScale = ContentScale.Fit,
-                                    colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                                 Text(app.label, color = Color.White, fontSize = 8.sp, maxLines = 1, fontFamily = font)
                             }
                         }
