@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.nativeKeyEvent
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.lazy.rememberLazyListState
 import kotlinx.coroutines.launch
