@@ -276,7 +276,7 @@ private fun AmberHome() {
                 onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
-            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).apply() }, onBack = { screen = Screen.SETTINGS })
+            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS })
             Screen.ALL_APPS -> AppListScreen("All apps", apps, mono, font, { screen = Screen.HOME }, ::launch)
             Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, mono, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
@@ -322,10 +322,8 @@ private fun ScreenTitle(title: String, onBack: () -> Unit) {
 
 @Composable
 private fun WallpaperLibraryScreen(
-    wallpapers: List<WallpaperItem>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-    onBack: () -> Unit
+    wallpapers: List<WallpaperItem>, selectedIndex: Int, dockApps: List<InstalledTvApp>,
+    mono: Boolean, font: FontFamily, onSelect: (Int) -> Unit, onBack: () -> Unit
 ) {
     var category by remember { mutableStateOf("All") }
     val categories = listOf("All") + wallpapers.map { it.category }.distinct()
@@ -333,8 +331,7 @@ private fun WallpaperLibraryScreen(
     Row(Modifier.fillMaxSize().background(Color(0xE9121B22)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
         Column(Modifier.weight(0.82f).fillMaxHeight()) {
             ScreenTitle("Background", onBack)
-            Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .62f), fontSize = 14.sp,
-                modifier = Modifier.padding(start = 66.dp, top = 3.dp, bottom = 18.dp))
+            Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .62f), fontSize = 14.sp, modifier = Modifier.padding(start = 66.dp, top = 3.dp, bottom = 18.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 14.dp)) {
                 items(categories) { item ->
                     @OptIn(ExperimentalTvMaterial3Api::class)
@@ -365,20 +362,35 @@ private fun WallpaperLibraryScreen(
                 }
             }
         }
-        Column(Modifier.weight(1.18f).fillMaxHeight().padding(top = 68.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Crossfade(targetState = selectedIndex.coerceIn(wallpapers.indices), animationSpec = tween(380), label = "wallpaper-preview") { index ->
-                val wallpaper = wallpapers[index]
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF202A31))) {
-                        AsyncImage(wallpaper.url, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x88000000)))))
-                        Text(wallpaper.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.align(Alignment.BottomStart).padding(22.dp))
+        Column(Modifier.weight(1.18f).fillMaxHeight().padding(top = 68.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val wallpaper = wallpapers[selectedIndex.coerceIn(wallpapers.indices)]
+            Crossfade(targetState = wallpaper.id, animationSpec = tween(380), label = "wallpaper-preview") {
+                Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF202A31))) {
+                    AsyncImage(wallpaper.url, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color.Transparent, Color(0x99000000)))))
+                    Row(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("9:41", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Light, fontFamily = font)
+                        Text("ALL APPS     ⚙ SETTINGS", color = Color.White.copy(alpha = .9f), fontSize = 9.sp)
                     }
-                    Text("PREVIEW  ·  " + wallpaper.category.uppercase(), color = Color.White.copy(alpha = .56f), fontSize = 11.sp, letterSpacing = 1.5.sp)
-                    Text("Press OK on a background to apply it", color = Color.White.copy(alpha = .78f), fontSize = 13.sp)
+                    Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(.92f).padding(bottom = 18.dp).clip(RoundedCornerShape(17.dp))
+                        .background(Color(0xB51A2934)).border(1.dp, Color(0x50FFFFFF), RoundedCornerShape(17.dp)).padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        val previewApps = dockApps.take(6)
+                        if (previewApps.isEmpty()) Text("Your dock is empty", color = Color.White.copy(alpha = .7f), modifier = Modifier.padding(12.dp), fontSize = 11.sp)
+                        else previewApps.forEach { app ->
+                            Column(Modifier.weight(1f).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val icon = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
+                                Image(icon, app.label, Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)), contentScale = ContentScale.Fit,
+                                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                                Text(app.label, color = Color.White, fontSize = 8.sp, maxLines = 1, fontFamily = font)
+                            }
+                        }
+                    }
                 }
             }
+            Text(wallpaper.title, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text("LIVE HOME SCREEN PREVIEW  ·  " + wallpaper.category.uppercase(), color = Color.White.copy(alpha = .56f), fontSize = 10.sp, letterSpacing = 1.2.sp)
+            Text("Select a background on the left to apply it instantly", color = Color.White.copy(alpha = .78f), fontSize = 12.sp)
         }
     }
 }
