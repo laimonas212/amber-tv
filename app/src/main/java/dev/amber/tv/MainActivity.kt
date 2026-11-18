@@ -264,7 +264,7 @@ private fun AmberHome() {
                         ) {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
-                                AppDockItem(app, mono, font, dockWiggle,
+                                AppDockItem(app, iconMode, removeIconBackground, font, dockWiggle,
                                     onLongPress = { dockWiggle = true },
                                     onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
                                     onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
@@ -293,8 +293,8 @@ private fun AmberHome() {
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
             Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS })
-            Screen.ALL_APPS -> AppListScreen("All apps", apps, mono, font, { screen = Screen.HOME }, ::launch)
-            Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, mono, font, { screen = Screen.SETTINGS },
+            Screen.ALL_APPS -> AppListScreen("All apps", apps, iconMode, removeIconBackground, font, { screen = Screen.HOME }, ::launch)
+            Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, iconMode, removeIconBackground, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
                 { index, delta -> val target = index + delta; if (target in dock.indices) { val next = dock.toMutableList(); val item = next.removeAt(index); next.add(target, item); saveDock(next) } })
         }
@@ -397,7 +397,7 @@ private fun WallpaperLibraryScreen(
                             Column(Modifier.weight(1f).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 val icon = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
                                 Image(icon, app.label, Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)), contentScale = ContentScale.Fit,
-                                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                                    colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                                 Text(app.label, color = Color.White, fontSize = 8.sp, maxLines = 1, fontFamily = font)
                             }
                         }
@@ -460,19 +460,19 @@ private fun SettingRow(title: String, value: String, hint: String, onClick: () -
 }
 
 @Composable
-private fun AppListScreen(title: String, apps: List<InstalledTvApp>, mono: Boolean, font: FontFamily, onBack: () -> Unit, onLaunch: (InstalledTvApp) -> Unit) {
+private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onBack: () -> Unit, onLaunch: (InstalledTvApp) -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 34.dp, bottom = 26.dp)) {
         ScreenTitle(title, onBack); Spacer(Modifier.height(20.dp))
         LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 150.dp), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            gridItems(apps, key = { it.packageName }) { app -> AppTile(app, mono, font) { onLaunch(app) } }
+            gridItems(apps, key = { it.packageName }) { app -> AppTile(app, iconMode, removeIconBackground, font) { onLaunch(app) } }
         }
     }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppTile(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
-    val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
+private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
+    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x70202D38), focusedContainerColor = Color(0xAA526779)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
@@ -486,7 +486,7 @@ private fun AppTile(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClic
 }
 
 @Composable
-private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, mono: Boolean, font: FontFamily, onBack: () -> Unit, onToggle: (InstalledTvApp) -> Unit, onMove: (Int, Int) -> Unit) {
+private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onBack: () -> Unit, onToggle: (InstalledTvApp) -> Unit, onMove: (Int, Int) -> Unit) {
     val selected = dock.mapNotNull { p -> apps.find { it.packageName == p } }
     val remaining = apps.filter { it.packageName !in dock }
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 26.dp, bottom = 20.dp)) {
@@ -496,7 +496,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, mon
             items(selected, key = { it.packageName }) { app ->
                 val index = dock.indexOf(app.packageName)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(Modifier.weight(1f)) { AppListRow(app, mono, font) {} }
+                    Box(Modifier.weight(1f)) { AppListRow(app, iconMode != 0, font) {} }
                     SmallAction("↑", index > 0) { onMove(index, -1) }
                     SmallAction("↓", index < dock.lastIndex) { onMove(index, 1) }
                     SmallAction("−", true) { onToggle(app) }
@@ -515,7 +515,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, mon
 
 @Composable
 private fun AppListRow(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
-    val bitmap = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 96).asImageBitmap() }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xAA18232C), focusedContainerColor = Color(0xDD435563))) {
@@ -537,7 +537,7 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { if (it.isFocused) onFocused() }
