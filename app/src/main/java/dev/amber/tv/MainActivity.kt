@@ -88,6 +88,7 @@ private const val KEY_ICON_NO_BG = "icon_no_adaptive_background"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
+private const val KEY_SHOW_APP_NAMES = "show_app_names"
 private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
 private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpapers.json"
@@ -244,6 +245,7 @@ private fun AmberHome() {
     var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(defaultWallpapers.indices)) }
     var wallpaperItems by remember { mutableStateOf(defaultWallpapers) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
+    var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
     var dockWiggle by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
@@ -320,27 +322,30 @@ private fun AmberHome() {
                         ) {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
-                                AppDockItem(app, iconMode, removeIconBackground, font, dockWiggle,
+                                AppDockItem(app, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
                                     onLongPress = { dockWiggle = true },
                                     onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
                                     onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
-                                    selected = dockFocusedIndex == index,
                                     onFocused = {
                                         val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
                                         lastDockFocusedIndex = index
-                                        dockFocusedIndex = index
                                         dockScrollJob?.cancel()
                                         dockScrollJob = scope.launch {
-                                            delay(24)
-                                            val info = dockListState.layoutInfo
-                                            val density = context.resources.displayMetrics.density
-                                            val edgePadding = (18f * density).toInt()
-                                            val itemWidth = (160f * density).toInt()
-                                            val targetStart = if (movingRight) {
-                                                (info.viewportSize.width - itemWidth - edgePadding).coerceAtLeast(edgePadding)
-                                            } else edgePadding
-                                            // Negative offset positions the focused item at the chosen screen edge.
-                                            dockListState.animateScrollToItem(index, -targetStart)
+                                            // Move the row by one item only when the focused item reaches an edge.
+                                            delay(16)
+                                            val item = dockListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                                            if (item != null) {
+                                                val density = context.resources.displayMetrics.density
+                                                val margin = (18f * density).toInt()
+                                                val rightEdge = dockListState.layoutInfo.viewportSize.width - margin
+                                                val leftEdge = margin
+                                                val step = (168f * density)
+                                                if (movingRight && item.offset + item.size > rightEdge) {
+                                                    dockListState.animateScrollBy(step)
+                                                } else if (!movingRight && item.offset < leftEdge) {
+                                                    dockListState.animateScrollBy(-step)
+                                                }
+                                            }
                                         }
                                     },
                                     onMove = { delta -> moveDockItem(index, delta) }
@@ -350,9 +355,10 @@ private fun AmberHome() {
                     }
                 }
             }
-            Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size,
+            Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
+                onShowAppNames = { showAppNames = it; prefs.edit().putBoolean(KEY_SHOW_APP_NAMES, it).apply() },
                 onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
                 onWallpaper = { screen = Screen.WALLPAPERS },
                 showWeather = showWeather,
@@ -498,13 +504,14 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈", onIconMode) }
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
+            item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
@@ -625,11 +632,11 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, selected: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
-        TvSurface(onClick, (if (selected) Modifier.border(2.dp, Color(0xFFFFC45C), RoundedCornerShape(27.dp)) else Modifier).fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
                 if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
                 else if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
@@ -639,11 +646,13 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Image(bitmap, app.label, Modifier.size(58.dp).clip(RoundedCornerShape(13.dp)), contentScale = ContentScale.Fit,
+            Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = if (showAppNames) 10.dp else 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Image(bitmap, app.label, Modifier.size(if (showAppNames) 58.dp else 88.dp).clip(RoundedCornerShape(if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
                     colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
-                Spacer(Modifier.height(8.dp))
-                Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+                if (showAppNames) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+                }
             }
         }
         if (wiggle) {
