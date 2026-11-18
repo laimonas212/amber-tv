@@ -3,6 +3,9 @@ package dev.amber.tv
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
