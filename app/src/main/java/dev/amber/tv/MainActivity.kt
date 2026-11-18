@@ -315,21 +315,14 @@ private fun AmberHome() {
                                         dockScrollJob = scope.launch {
                                             delay(24)
                                             val info = dockListState.layoutInfo
-                                            val item = info.visibleItemsInfo.firstOrNull { it.index == index }
-                                            if (item != null) {
-                                                val density = context.resources.displayMetrics.density
-                                                val edgePadding = (18f * density).toInt()
-                                                val targetStart = if (movingRight) {
-                                                    (info.viewportSize.width - item.size - edgePadding).coerceAtLeast(edgePadding)
-                                                } else edgePadding
-                                                val currentStart = item.offset
-                                                val delta = currentStart - targetStart
-                                                if (kotlin.math.abs(delta) > (8f * density).toInt()) {
-                                                    dockListState.animateScrollToItem(index, -targetStart)
-                                                }
-                                            } else {
-                                                dockListState.animateScrollToItem(index)
-                                            }
+                                            val density = context.resources.displayMetrics.density
+                                            val edgePadding = (18f * density).toInt()
+                                            val itemWidth = (160f * density).toInt()
+                                            val targetStart = if (movingRight) {
+                                                (info.viewportSize.width - itemWidth - edgePadding).coerceAtLeast(edgePadding)
+                                            } else edgePadding
+                                            // Negative offset positions the focused item at the chosen screen edge.
+                                            dockListState.animateScrollToItem(index, -targetStart)
                                         }
                                     },
                                     onMove = { delta -> moveDockItem(index, delta) }
