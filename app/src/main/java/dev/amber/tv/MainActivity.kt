@@ -201,7 +201,9 @@ private fun AmberHome() {
     val prefs = remember { context.getSharedPreferences(PREFS, 0) }
     val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
     var screen by remember { mutableStateOf(Screen.HOME) }
-    var mono by remember { mutableStateOf(prefs.getBoolean(KEY_MONO, false)) }
+    var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
+    val mono = iconMode != 0
+    var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
     var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(defaultWallpapers.indices)) }
     var wallpaperItems by remember { mutableStateOf(defaultWallpapers) }
@@ -280,8 +282,9 @@ private fun AmberHome() {
                     }
                 }
             }
-            Screen.SETTINGS -> SettingsScreen(mono, fontChoice, wallpaperChoice, wallpaperItems.size,
-                onMono = { mono = it; prefs.edit().putBoolean(KEY_MONO, it).apply() },
+            Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size,
+                onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
+                onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
                 onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
                 onWallpaper = { screen = Screen.WALLPAPERS },
                 showWeather = showWeather,
