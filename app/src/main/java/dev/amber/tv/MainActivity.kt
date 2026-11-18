@@ -154,6 +154,14 @@ class MainActivity : ComponentActivity() {
 }
 
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
+private fun appIconBitmap(app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
+    val drawable = if (removeAdaptiveBackground && app.icon is AdaptiveIconDrawable) app.icon.foreground else app.icon
+    return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, size, size)
+        drawable.draw(canvas)
+    }
+}
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
 
 private fun loadInstalledTvApps(pm: PackageManager): List<InstalledTvApp> {
