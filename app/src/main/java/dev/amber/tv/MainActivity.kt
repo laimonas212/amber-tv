@@ -483,7 +483,7 @@ private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Bo
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(17.dp)), contentScale = ContentScale.Fit,
-                colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.height(10.dp))
             Text(app.label, color = Color.White, fontSize = 15.sp, fontFamily = font, maxLines = 1)
         }
