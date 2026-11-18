@@ -473,7 +473,8 @@ private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: I
 @Composable
 private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
-    TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+    var focused by remember { mutableStateOf(false) }
+    TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x70202D38), focusedContainerColor = Color(0xAA526779)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -516,8 +517,9 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
 @Composable
 private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 96).asImageBitmap() }
+    var focused by remember { mutableStateOf(false) }
     @OptIn(ExperimentalTvMaterial3Api::class)
-    TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
+    TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xAA18232C), focusedContainerColor = Color(0xDD435563))) {
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(bitmap, app.label, Modifier.size(34.dp), colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
@@ -539,6 +541,7 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
+    var focused by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
@@ -552,7 +555,7 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Image(bitmap, app.label, Modifier.size(58.dp).clip(RoundedCornerShape(13.dp)), contentScale = ContentScale.Fit,
-                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                    colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                 Spacer(Modifier.height(8.dp))
                 Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
             }
