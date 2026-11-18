@@ -7,7 +7,7 @@ A custom, ad-free Android TV home screen for Philips Google TV (TA1 / PH1M_WW_99
 - Native Android app: Kotlin + Jetpack Compose for TV.
 - Designed for 10-foot viewing and D-pad / remote navigation.
 - Home screen inspired by the calm, cinematic feel of tvOS and digital-frame interfaces; no copied CleanFrame or unlicensed launcher assets.
-- Installed-app discovery through PackageManager.
+- Installed-app discovery through PackageManager, with real app icons and D-pad launch actions.
 - Default HOME role is tested only after the APK works as a normal app.
 - Philips `org.droidtv.homeintentresolver` behavior is treated as device-specific and must be validated before changing system components.
 
@@ -71,4 +71,4 @@ The exact HOME routing on Philips firmware may differ. No system package is disa
 
 ## Status
 
-Early scaffold. The first milestone is a stable, attractive launcher screen and correct remote focus behavior. Philips HOME takeover is a separate device-validation milestone.
+Milestone 1: first launcher prototype with a cinematic home screen, installed TV-app discovery, actual app icons, remote focus, and app launching. Next: run the APK on the Philips TA1, refine focus/layout from the real screen, then validate HOME-key routing and rollback behavior.
