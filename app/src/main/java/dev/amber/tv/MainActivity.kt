@@ -208,7 +208,7 @@ private fun AmberHome() {
                                         val visible = dockListState.layoutInfo.visibleItemsInfo
                                         val first = visible.firstOrNull()?.index ?: 0
                                         val last = visible.lastOrNull()?.index ?: dockApps.lastIndex
-                                        if (index >= last - 1 && last < dockApps.lastIndex) scope.launch { dockListState.animateScrollToItem((index - 2).coerceAtLeast(0)) }
+                                        if (index >= last - 1 && last < dockApps.lastIndex) scope.launch { dockListState.animateScrollToItem((index - visible.size + 2).coerceAtLeast(0)) }
                                         else if (index <= first + 1 && first > 0) scope.launch { dockListState.animateScrollToItem((index - 1).coerceAtLeast(0)) }
                                     },
                                     onMove = { delta -> moveDockItem(index, delta) }
@@ -380,28 +380,31 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
-    TvSurface(onClick, Modifier.width(160.dp).height(124.dp).onFocusChanged { if (it.isFocused) onFocused() }
-        .onKeyEvent { event ->
-            val key = event.nativeKeyEvent
-            if (key.action == AndroidKeyEvent.ACTION_DOWN && key.repeatCount >= 1 && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER) { onLongPress(); true }
-            else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT) { onMove(-1); true }
-            else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) { onMove(1); true }
-            else false
-        }.pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(bitmap, app.label, Modifier.size(58.dp).clip(RoundedCornerShape(13.dp)), contentScale = ContentScale.Fit,
-                colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
-            Spacer(Modifier.height(8.dp))
-            Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+    Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
+        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { if (it.isFocused) onFocused() }
+            .onKeyEvent { event ->
+                val key = event.nativeKeyEvent
+                if (key.action == AndroidKeyEvent.ACTION_DOWN && key.repeatCount >= 1 && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER) { onLongPress(); true }
+                else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT) { onMove(-1); true }
+                else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) { onMove(1); true }
+                else false
+            }
+            .pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Image(bitmap, app.label, Modifier.size(58.dp).clip(RoundedCornerShape(13.dp)), contentScale = ContentScale.Fit,
+                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                Spacer(Modifier.height(8.dp))
+                Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+            }
         }
-    }
-    if (wiggle) {
-        TvSurface(onRemove, Modifier.offset(x = (-2).dp, y = 2.dp).size(27.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFE34D4D), focusedContainerColor = Color(0xFFFF7777))) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("−", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+        if (wiggle) {
+            TvSurface(onRemove, Modifier.padding(top = 2.dp, end = 2.dp).size(27.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+                colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFE34D4D), focusedContainerColor = Color(0xFFFF7777))) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("−", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
