@@ -16,6 +16,8 @@
     <application
         android:allowBackup="true"
         android:label="Amber TV"
+        android:icon="@drawable/amber_crystal"
+        android:roundIcon="@drawable/amber_crystal"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <activity
