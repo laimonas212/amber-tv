@@ -1,8 +1,12 @@
 package dev.amber.tv
 
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,66 +18,126 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialTheme as Material3Theme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Surface as TvSurface
+import androidx.core.graphics.drawable.toBitmap
 import androidx.tv.material3.ClickableSurfaceDefaults
-import java.time.LocalDate
-import java.time.LocalTime
+import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.MaterialTheme as TvMaterialTheme
+import androidx.tv.material3.Surface as TvSurface
+import kotlinx.coroutines.delay
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalTvMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                AmberHome()
+            Material3Theme {
+                TvMaterialTheme {
+                    AmberHome()
+                }
             }
         }
     }
 }
 
-private data class FeaturedApp(
-    val name: String,
-    val monogram: String,
-    val tint: Color,
+private data class InstalledTvApp(
+    val packageName: String,
+    val activityName: String,
+    val label: String,
+    val icon: Drawable,
 )
 
-private val featuredApps = listOf(
-    FeaturedApp("Apple TV", "tv+", Color(0xFF292B38)),
-    FeaturedApp("YouTube", "▶", Color(0xFFB3262D)),
-    FeaturedApp("Netflix", "N", Color(0xFF8D1720)),
-    FeaturedApp("Disney+", "D+", Color(0xFF172C68)),
-    FeaturedApp("Plex", "plex", Color(0xFFE18A25)),
-    FeaturedApp("Spotify", "≋", Color(0xFF176B4A)),
-)
+private fun loadInstalledTvApps(packageManager: PackageManager): List<InstalledTvApp> {
+    val categories = listOf(
+        Intent.CATEGORY_LEANBACK_LAUNCHER,
+        Intent.CATEGORY_LAUNCHER,
+    )
+
+    val resolved = categories.flatMap { category ->
+        val query = Intent(Intent.ACTION_MAIN).addCategory(category)
+        @Suppress("DEPRECATION")
+        packageManager.queryIntentActivities(query, 0)
+    }
+
+    val apps = resolved.mapNotNull { resolveInfo ->
+        val activity = resolveInfo.activityInfo ?: return@mapNotNull null
+        InstalledTvApp(
+            packageName = activity.packageName,
+            activityName = activity.name,
+            label = resolveInfo.loadLabel(packageManager)?.toString()
+                ?.takeIf { it.isNotBlank() } ?: activity.packageName,
+            icon = resolveInfo.loadIcon(packageManager),
+        )
+    }.filter { it.packageName != "dev.amber.tv" }
+        .distinctBy { it.packageName }
+
+    // Keep the most-used streaming apps near the front when they are installed.
+    val preferredOrder = listOf(
+        "com.apple.atve.androidtv.appletv",
+        "lt.lrt.epika",
+        "com.wbd.stream",
+        "lt.go3.android.tv",
+        "com.stremio.one",
+        "com.disney.disneyplus",
+        "com.plexapp.android",
+        "lt.telia.tv",
+        "com.spotify.tv.android",
+    )
+
+    return apps.sortedWith(
+        compareBy<InstalledTvApp> {
+            val index = preferredOrder.indexOf(it.packageName)
+            if (index == -1) Int.MAX_VALUE else index
+        }.thenBy { it.label.lowercase() }
+    )
+}
 
 @Composable
 private fun AmberHome() {
-    var selected by remember { mutableIntStateOf(0) }
-    val date = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM"))
-    val time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+    val context = LocalContext.current
+    val apps = remember(context) {
+        loadInstalledTvApps(context.packageManager)
+    }
+
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            now = LocalDateTime.now()
+        }
+    }
+
+    val time = now.format(DateTimeFormatter.ofPattern("HH:mm"))
+    val date = now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM"))
+        .replaceFirstChar { it.uppercase() }
 
     Box(
         modifier = Modifier
@@ -140,7 +204,7 @@ private fun AmberHome() {
                         fontWeight = FontWeight.Light
                     )
                     Text(
-                        text = date.replaceFirstChar { it.uppercase() },
+                        text = date,
                         color = Color(0xFF9AAAB7),
                         fontSize = 13.sp
                     )
@@ -171,17 +235,30 @@ private fun AmberHome() {
                     letterSpacing = 2.sp
                 )
                 Spacer(Modifier.height(18.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    featuredApps.forEachIndexed { index, app ->
-                        AppTile(
-                            app = app,
-                            isSelected = selected == index,
-                            onSelected = { selected = index },
-                            modifier = Modifier.weight(1f)
-                        )
+
+                if (apps.isEmpty()) {
+                    Text(
+                        text = "No TV apps found yet.",
+                        color = Color(0xFFB2C0CA),
+                        fontSize = 16.sp
+                    )
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(apps, key = { it.packageName }) { app ->
+                            AppTile(
+                                app = app,
+                                onClick = {
+                                    runCatching {
+                                        val launchIntent = Intent(Intent.ACTION_MAIN)
+                                            .setClassName(app.packageName, app.activityName)
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(launchIntent)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -222,43 +299,42 @@ private fun AmberHome() {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun AppTile(
-    app: FeaturedApp,
-    isSelected: Boolean,
-    onSelected: () -> Unit,
-    modifier: Modifier = Modifier,
+    app: InstalledTvApp,
+    onClick: () -> Unit,
 ) {
+    val iconBitmap = remember(app.packageName) {
+        app.icon.toBitmap(width = 144, height = 144).asImageBitmap()
+    }
+
     TvSurface(
-        onClick = onSelected,
-        modifier = modifier
-            .height(116.dp)
-            .onFocusChanged { if (it.isFocused) onSelected() },
+        onClick = onClick,
+        modifier = Modifier.size(width = 168.dp, height = 122.dp),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = app.tint.copy(alpha = 0.92f),
+            containerColor = Color(0xE6293542),
             focusedContainerColor = Color(0xFF344D5D),
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.06f)
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start,
         ) {
-            Text(
-                text = app.monogram,
-                color = Color.White,
-                fontSize = if (app.monogram.length > 2) 25.sp else 34.sp,
-                fontWeight = FontWeight.Bold
+            Image(
+                bitmap = iconBitmap,
+                contentDescription = app.label,
+                modifier = Modifier.size(48.dp),
+                contentScale = ContentScale.Fit,
             )
             Text(
-                text = app.name,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 4.dp, bottom = 2.dp),
-                color = Color.White.copy(alpha = 0.88f),
+                text = app.label,
+                color = Color.White,
                 fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
             )
         }
     }
