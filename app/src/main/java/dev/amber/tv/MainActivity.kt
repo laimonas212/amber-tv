@@ -55,6 +55,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.foundation.lazy.rememberLazyListState
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.*
@@ -156,11 +157,45 @@ class MainActivity : ComponentActivity() {
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
 private fun appIconBitmap(app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
     val drawable = if (removeAdaptiveBackground && app.icon is AdaptiveIconDrawable) app.icon.foreground else app.icon
-    return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, size, size)
-        drawable.draw(canvas)
+    val sourceSize = size * 2
+    val source = Bitmap.createBitmap(sourceSize, sourceSize, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(source)
+    drawable.setBounds(0, 0, sourceSize, sourceSize)
+    drawable.draw(canvas)
+    if (!removeAdaptiveBackground) return Bitmap.createScaledBitmap(source, size, size, true)
+
+    // Trim transparent padding, then fit every foreground into the same visual box.
+    val pixels = IntArray(sourceSize * sourceSize)
+    source.getPixels(pixels, 0, sourceSize, 0, 0, sourceSize, sourceSize)
+    var left = sourceSize
+    var top = sourceSize
+    var right = -1
+    var bottom = -1
+    for (y in 0 until sourceSize) {
+        for (x in 0 until sourceSize) {
+            if ((pixels[y * sourceSize + x] ushr 24) > 12) {
+                if (x < left) left = x
+                if (x > right) right = x
+                if (y < top) top = y
+                if (y > bottom) bottom = y
+            }
+        }
     }
+    if (right < left || bottom < top) return Bitmap.createScaledBitmap(source, size, size, true)
+    val padding = (maxOf(right - left + 1, bottom - top + 1) * 0.07f).toInt()
+    left = (left - padding).coerceAtLeast(0)
+    top = (top - padding).coerceAtLeast(0)
+    right = (right + padding).coerceAtMost(sourceSize - 1)
+    bottom = (bottom + padding).coerceAtMost(sourceSize - 1)
+    val cropped = Bitmap.createBitmap(source, left, top, right - left + 1, bottom - top + 1)
+    val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val outCanvas = Canvas(output)
+    val scale = (size * 0.82f) / maxOf(cropped.width, cropped.height)
+    val width = (cropped.width * scale).toInt()
+    val height = (cropped.height * scale).toInt()
+    val dest = android.graphics.Rect((size - width) / 2, (size - height) / 2, (size + width) / 2, (size + height) / 2)
+    outCanvas.drawBitmap(cropped, null, dest, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+    return output
 }
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
 
@@ -211,6 +246,8 @@ private fun AmberHome() {
     var dockWiggle by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
+    var dockFocusedIndex by remember { mutableIntStateOf(-1) }
+    var dockScrollJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var dock by remember {
@@ -269,17 +306,29 @@ private fun AmberHome() {
                                     onLongPress = { dockWiggle = true },
                                     onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
                                     onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
+                                    selected = dockFocusedIndex == index,
                                     onFocused = {
                                         val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
                                         lastDockFocusedIndex = index
-                                        scope.launch {
-                                            delay(70)
-                                            val itemInfo = dockListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-                                            if (itemInfo != null) {
-                                                val edgeOffset = if (movingRight) {
-                                                    (dockListState.layoutInfo.viewportSize.width - itemInfo.size - (12 * context.resources.displayMetrics.density).toInt()).coerceAtLeast(0)
-                                                } else 0
-                                                dockListState.animateScrollToItem(index, edgeOffset)
+                                        dockFocusedIndex = index
+                                        dockScrollJob?.cancel()
+                                        dockScrollJob = scope.launch {
+                                            delay(24)
+                                            val info = dockListState.layoutInfo
+                                            val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+                                            if (item != null) {
+                                                val density = context.resources.displayMetrics.density
+                                                val edgePadding = (18f * density).toInt()
+                                                val targetStart = if (movingRight) {
+                                                    (info.viewportSize.width - item.size - edgePadding).coerceAtLeast(edgePadding)
+                                                } else edgePadding
+                                                val currentStart = item.offset
+                                                val delta = currentStart - targetStart
+                                                if (kotlin.math.abs(delta) > (8f * density).toInt()) {
+                                                    dockListState.animateScrollToItem(index, -targetStart)
+                                                }
+                                            } else {
+                                                dockListState.animateScrollToItem(index)
                                             }
                                         }
                                     },
@@ -551,11 +600,11 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, selected: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
-        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+        TvSurface(onClick, (if (selected) Modifier.border(2.dp, Color(0xFFFFC45C), RoundedCornerShape(27.dp)) else Modifier).fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
                 if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
                 else if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
