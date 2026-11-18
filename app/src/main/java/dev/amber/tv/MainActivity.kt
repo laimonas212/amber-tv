@@ -210,6 +210,7 @@ private fun AmberHome() {
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var dockWiggle by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
+    var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
     val scope = rememberCoroutineScope()
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var dock by remember {
@@ -268,7 +269,20 @@ private fun AmberHome() {
                                     onLongPress = { dockWiggle = true },
                                     onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
                                     onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
-                                    onFocused = { /* Native LazyRow focus scrolling keeps the selected app at the viewport edge. */ },
+                                    onFocused = {
+                                        val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
+                                        lastDockFocusedIndex = index
+                                        scope.launch {
+                                            delay(70)
+                                            val itemInfo = dockListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                                            if (itemInfo != null) {
+                                                val edgeOffset = if (movingRight) {
+                                                    (dockListState.layoutInfo.viewportSize.width - itemInfo.size - (12 * context.resources.displayMetrics.density).toInt()).coerceAtLeast(0)
+                                                } else 0
+                                                dockListState.animateScrollToItem(index, edgeOffset)
+                                            }
+                                        }
+                                    },
                                     onMove = { delta -> moveDockItem(index, delta) }
                                 )
                             }
