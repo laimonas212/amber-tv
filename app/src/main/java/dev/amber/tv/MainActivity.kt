@@ -12,6 +12,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -114,6 +121,7 @@ private fun AmberHome() {
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
     var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpapers.indices)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
+    var dockWiggle by remember { mutableStateOf(false) }
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var dock by remember {
         mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: apps.map { it.packageName })
@@ -123,7 +131,7 @@ private fun AmberHome() {
     fun launch(app: InstalledTvApp) {
         runCatching { context.startActivity(Intent(Intent.ACTION_MAIN).setClassName(app.packageName, app.activityName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
-    BackHandler(screen != Screen.HOME) { screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
+    BackHandler(screen != Screen.HOME || dockWiggle) { if (dockWiggle) dockWiggle = false else screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     LaunchedEffect(showWeather) { while (true) { now = LocalDateTime.now(); if (showWeather) weather = fetchWeather(); delay(30 * 60 * 1000L) } }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
@@ -149,11 +157,11 @@ private fun AmberHome() {
                 if (dockApps.isEmpty()) Text("Your dock is empty. Open Launcher Settings to add apps.", color = Color.White, modifier = Modifier.align(Alignment.Center), fontSize = 20.sp)
                 else {
                     val dockShape = RoundedCornerShape(30.dp)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 104.dp).height(142.dp)) {
-                        AsyncImage(wallpapers[wallpaperChoice], null, Modifier.fillMaxSize().blur(26.dp).clip(dockShape), contentScale = ContentScale.Crop)
-                        Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0xA80A1118), Color(0xB80A1118), Color(0xA80A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 48.dp).height(142.dp).clip(dockShape)) {
+                        AsyncImage(wallpapers[wallpaperChoice], null, Modifier.fillMaxSize().blur(12.dp).clip(dockShape), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0x780A1118), Color(0x880A1118), Color(0x780A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
                         LazyRow(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            items(dockApps, key = { it.packageName }) { app -> AppDockItem(app, mono, font) { launch(app) } }
+                            items(dockApps, key = { it.packageName }) { app -> AppDockItem(app, mono, font, dockWiggle, { dockWiggle = !dockWiggle }, { saveDock(dock - app.packageName); if (dock.isEmpty()) dockWiggle = false }) { launch(app) } }
                         }
                         Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(42.dp).background(Brush.horizontalGradient(listOf(Color(0x550A1118), Color.Transparent))))
                         Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(42.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0x550A1118)))))
@@ -228,7 +236,25 @@ private fun SettingRow(title: String, value: String, hint: String, onClick: () -
 private fun AppListScreen(title: String, apps: List<InstalledTvApp>, mono: Boolean, font: FontFamily, onBack: () -> Unit, onLaunch: (InstalledTvApp) -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 34.dp, bottom = 26.dp)) {
         ScreenTitle(title, onBack); Spacer(Modifier.height(20.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) { items(apps, key = { it.packageName }) { app -> AppListRow(app, mono, font) { onLaunch(app) } } }
+        LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 150.dp), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            gridItems(apps, key = { it.packageName }) { app -> AppTile(app, mono, font) { onLaunch(app) } }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun AppTile(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
+    val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
+    TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth(), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x70202D38), focusedContainerColor = Color(0xAA526779)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
+        Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(17.dp)), contentScale = ContentScale.Fit,
+                colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+            Spacer(Modifier.height(10.dp))
+            Text(app.label, color = Color.White, fontSize = 15.sp, fontFamily = font, maxLines = 1)
+        }
     }
 }
 
@@ -284,16 +310,26 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit) {
     val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
-    TvSurface(onClick, Modifier.width(160.dp).height(124.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x25FFFFFF)),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(bitmap, app.label, Modifier.size(58.dp), contentScale = ContentScale.Fit,
-                colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
-            Spacer(Modifier.height(8.dp))
-            Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+    Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
+        TvSurface(onClick, Modifier.fillMaxSize().pointerInput(app.packageName, wiggle) {
+            detectTapGestures(onLongPress = { onLongPress() })
+        }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+            colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x25FFFFFF)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Image(bitmap, app.label, Modifier.size(58.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Fit,
+                    colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                Spacer(Modifier.height(8.dp))
+                Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+            }
+        }
+        if (wiggle) {
+            TvSurface(onRemove, Modifier.padding(top = 2.dp, end = 2.dp).size(27.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+                colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFE34D4D), focusedContainerColor = Color(0xFFFF7777))) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("−", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
