@@ -268,13 +268,7 @@ private fun AmberHome() {
                                     onLongPress = { dockWiggle = true },
                                     onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
                                     onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
-                                    onFocused = {
-                                        val visible = dockListState.layoutInfo.visibleItemsInfo
-                                        val first = visible.firstOrNull()?.index ?: 0
-                                        val last = visible.lastOrNull()?.index ?: dockApps.lastIndex
-                                        if (index >= last - 1 && last < dockApps.lastIndex) scope.launch { dockListState.animateScrollToItem((index - visible.size + 2).coerceAtLeast(0)) }
-                                        else if (index <= first + 1 && first > 0) scope.launch { dockListState.animateScrollToItem((index - 1).coerceAtLeast(0)) }
-                                    },
+                                    onFocused = { /* Native LazyRow focus scrolling keeps the selected app at the viewport edge. */ },
                                     onMove = { delta -> moveDockItem(index, delta) }
                                 )
                             }
