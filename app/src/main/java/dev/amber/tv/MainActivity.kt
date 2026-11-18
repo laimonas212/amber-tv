@@ -30,6 +30,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme as Material3Theme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -194,6 +201,7 @@ private fun AmberHome() {
         mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: apps.map { it.packageName })
     }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
+    var splashVisible by remember { mutableStateOf(true) }
     fun saveDock(value: List<String>) { dock = value; prefs.edit().putString(KEY_DOCK, value.joinToString("|")).apply() }
     fun moveDockItem(index: Int, delta: Int) { val target = index + delta; if (target in dock.indices) { val next = dock.toMutableList(); val item = next.removeAt(index); next.add(target, item); saveDock(next) } }
     fun launch(app: InstalledTvApp) {
@@ -201,6 +209,7 @@ private fun AmberHome() {
     }
     BackHandler(screen != Screen.HOME || dockWiggle) { if (dockWiggle) dockWiggle = false else screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     LaunchedEffect(showWeather) { while (true) { now = LocalDateTime.now(); if (showWeather) weather = fetchWeather(); delay(30 * 60 * 1000L) } }
+    LaunchedEffect(Unit) { delay(2200); splashVisible = false }
     LaunchedEffect(Unit) { val remote = fetchRemoteWallpapers(); if (remote.isNotEmpty()) { wallpaperItems = (defaultWallpapers + remote).distinctBy { it.id }; wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpaperItems.indices) } }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
@@ -217,7 +226,6 @@ private fun AmberHome() {
                         if (showWeather && weather != null) WeatherChip(weather!!)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        HeaderButton(Icons.Default.Photo, "Wallpapers") { screen = Screen.WALLPAPERS }
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -268,11 +276,28 @@ private fun AmberHome() {
                 onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
-            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).apply(); screen = Screen.HOME }, onBack = { screen = Screen.HOME })
+            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).apply() }, onBack = { screen = Screen.SETTINGS })
             Screen.ALL_APPS -> AppListScreen("All apps", apps, mono, font, { screen = Screen.HOME }, ::launch)
             Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, mono, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
                 { index, delta -> val target = index + delta; if (target in dock.indices) { val next = dock.toMutableList(); val item = next.removeAt(index); next.add(target, item); saveDock(next) } })
+        }
+        if (splashVisible) AmberBootSplash()
+    }
+}
+
+@Composable
+private fun AmberBootSplash() {
+    val context = LocalContext.current
+    val icon = remember { context.packageManager.getApplicationIcon(context.packageName).toBitmap(320, 320).asImageBitmap() }
+    val transition = rememberInfiniteTransition(label = "amber-glow")
+    val glow = transition.animateFloat(0.28f, 0.72f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow")
+    val scale = transition.animateFloat(0.97f, 1.025f, infiniteRepeatable(tween(1900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
+    Box(Modifier.fillMaxSize().background(Color(0xFF050607)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(330.dp).background(Brush.radialGradient(listOf(Color(0x99FF9B18).copy(alpha = glow.value), Color(0x00FF8A00))), RoundedCornerShape(50)))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Image(icon, "Amber crystal", Modifier.size(176.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value }, contentScale = ContentScale.Fit)
+            Text("AMBER TV", color = Color.White.copy(alpha = 0.88f), fontSize = 17.sp, fontWeight = FontWeight.Medium, letterSpacing = 5.sp)
         }
     }
 }
@@ -305,43 +330,53 @@ private fun WallpaperLibraryScreen(
     var category by remember { mutableStateOf("All") }
     val categories = listOf("All") + wallpapers.map { it.category }.distinct()
     val filtered = wallpapers.withIndex().filter { category == "All" || it.value.category == category }
-    Column(Modifier.fillMaxSize().padding(start = 68.dp, end = 68.dp, top = 24.dp, bottom = 20.dp)) {
-        ScreenTitle("Wallpaper Library", onBack)
-        Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .66f), fontSize = 14.sp,
-            modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 12.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-            items(categories) { item ->
-                @OptIn(ExperimentalTvMaterial3Api::class)
-                TvSurface(onClick = { category = item }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
-                    colors = ClickableSurfaceDefaults.colors(containerColor = if (category == item) Color(0xCC607D91) else Color(0x66202E3A),
-                        focusedContainerColor = Color(0xDD607D91))) {
-                    Text(item, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
+    Row(Modifier.fillMaxSize().background(Color(0xE9121B22)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
+        Column(Modifier.weight(0.82f).fillMaxHeight()) {
+            ScreenTitle("Background", onBack)
+            Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .62f), fontSize = 14.sp,
+                modifier = Modifier.padding(start = 66.dp, top = 3.dp, bottom = 18.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 14.dp)) {
+                items(categories) { item ->
+                    @OptIn(ExperimentalTvMaterial3Api::class)
+                    TvSurface(onClick = { category = item }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (category == item) Color(0xCCB66B24) else Color(0x66202E3A), focusedContainerColor = Color(0xDDAA692F))) {
+                        Text(item, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp))
+                    }
+                }
+            }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                items(filtered, key = { it.value.id }) { indexed ->
+                    val wallpaper = indexed.value
+                    val selected = indexed.index == selectedIndex
+                    @OptIn(ExperimentalTvMaterial3Api::class)
+                    TvSurface(onClick = { onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(58.dp),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) Color(0xE6F1F4F4) else Color(0x77202B32), focusedContainerColor = if (selected) Color.White else Color(0xAA526779)),
+                        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.015f)) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.size(width = 58.dp, height = 38.dp).clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
+                            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(wallpaper.title, color = if (selected) Color(0xFF17232C) else Color.White, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                                Text(wallpaper.category, color = if (selected) Color(0xFF52616A) else Color.White.copy(alpha = .58f), fontSize = 11.sp)
+                            }
+                            if (selected) Text("✓", color = Color(0xFF17232C), fontSize = 18.sp, modifier = Modifier.padding(end = 4.dp))
+                        }
+                    }
                 }
             }
         }
-        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            gridItems(filtered, key = { it.value.id }) { indexed ->
-                val wallpaper = indexed.value
-                val selected = indexed.index == selectedIndex
-                @OptIn(ExperimentalTvMaterial3Api::class)
-                TvSurface(onClick = { onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(142.dp),
-                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
-                    colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x66202E3A), focusedContainerColor = Color(0xAA526779)),
-                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.035f)) {
-                    Box(Modifier.fillMaxSize()) {
-                        AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))))
-                        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 9.dp)) {
-                            Text(wallpaper.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            Text(wallpaper.category, color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
-                        }
-                        if (selected) {
-                            Box(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color(0xDDFFFFFF), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp)) {
-                                Text("Selected", color = Color(0xFF17232C), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
+        Column(Modifier.weight(1.18f).fillMaxHeight().padding(top = 68.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Crossfade(targetState = selectedIndex.coerceIn(wallpapers.indices), animationSpec = tween(380), label = "wallpaper-preview") { index ->
+                val wallpaper = wallpapers[index]
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF202A31))) {
+                        AsyncImage(wallpaper.url, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0x88000000)))))
+                        Text(wallpaper.title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.align(Alignment.BottomStart).padding(22.dp))
                     }
+                    Text("PREVIEW  ·  " + wallpaper.category.uppercase(), color = Color.White.copy(alpha = .56f), fontSize = 11.sp, letterSpacing = 1.5.sp)
+                    Text("Press OK on a background to apply it", color = Color.White.copy(alpha = .78f), fontSize = 13.sp)
                 }
             }
         }
