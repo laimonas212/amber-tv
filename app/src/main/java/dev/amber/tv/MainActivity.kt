@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
@@ -261,7 +262,24 @@ private fun AmberHome() {
         runCatching { context.startActivity(Intent(Intent.ACTION_MAIN).setClassName(app.packageName, app.activityName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
     BackHandler(screen != Screen.HOME || dockWiggle) { if (dockWiggle) dockWiggle = false else screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
-    LaunchedEffect(showWeather) { while (true) { now = LocalDateTime.now(); if (showWeather) weather = fetchWeather(); delay(30 * 60 * 1000L) } }
+    // Keep the Home clock live; switching back from Settings updates it immediately.
+    LaunchedEffect(screen) {
+        if (screen == Screen.HOME) {
+            while (true) {
+                now = LocalDateTime.now()
+                delay(1000L)
+            }
+        }
+    }
+    // Weather is independent from the clock and refreshes only every 30 minutes.
+    LaunchedEffect(showWeather) {
+        if (showWeather) {
+            while (true) {
+                weather = fetchWeather()
+                delay(30 * 60 * 1000L)
+            }
+        }
+    }
     LaunchedEffect(Unit) { delay(2200); splashVisible = false }
     LaunchedEffect(Unit) { val remote = fetchRemoteWallpapers(); if (remote.isNotEmpty()) { wallpaperItems = (defaultWallpapers + remote).distinctBy { it.id }; wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpaperItems.indices) } }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
@@ -357,12 +375,26 @@ private fun AmberBootSplash() {
     val context = LocalContext.current
     val icon = remember { context.packageManager.getApplicationIcon(context.packageName).toBitmap(320, 320).asImageBitmap() }
     val transition = rememberInfiniteTransition(label = "amber-glow")
-    val glow = transition.animateFloat(0.28f, 0.72f, infiniteRepeatable(tween(1500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow")
-    val scale = transition.animateFloat(0.97f, 1.025f, infiniteRepeatable(tween(1900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
+    val glowAlpha = transition.animateFloat(0.07f, 0.13f, infiniteRepeatable(tween(1900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow-alpha")
+    val scale = transition.animateFloat(0.985f, 1.015f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
     Box(Modifier.fillMaxSize().background(Color(0xFF050607)), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(330.dp).background(Brush.radialGradient(listOf(Color(0x99FF9B18).copy(alpha = glow.value), Color(0x00FF8A00))), RoundedCornerShape(50)))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Image(icon, "Amber crystal", Modifier.size(176.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value }, contentScale = ContentScale.Fit)
+            Box(contentAlignment = Alignment.Center) {
+                // Glow follows the crystal silhouette and stays clear of the wordmark.
+                Image(
+                    icon,
+                    null,
+                    Modifier.size(184.dp).graphicsLayer { alpha = glowAlpha.value }.blur(19.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(Color(0xFFFFA52B))
+                )
+                Image(
+                    icon,
+                    "Amber crystal",
+                    Modifier.size(176.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+                    contentScale = ContentScale.Fit
+                )
+            }
             Text("AMBER TV", color = Color.White.copy(alpha = 0.88f), fontSize = 17.sp, fontWeight = FontWeight.Medium, letterSpacing = 5.sp)
         }
     }
