@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +43,10 @@ import androidx.tv.material3.MaterialTheme as TvMaterialTheme
 import androidx.tv.material3.Surface as TvSurface
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -50,6 +55,7 @@ private const val KEY_DOCK = "dock_packages"
 private const val KEY_MONO = "monochrome_icons"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
+private const val KEY_WEATHER = "show_weather"
 private val wallpapers = listOf(
     "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=2400&q=85",
     "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85",
@@ -81,6 +87,23 @@ private fun loadInstalledTvApps(pm: PackageManager): List<InstalledTvApp> {
     return apps.sortedWith(compareBy<InstalledTvApp> { val i = preferred.indexOf(it.packageName); if (i < 0) Int.MAX_VALUE else i }.thenBy { it.label.lowercase() })
 }
 
+private data class WeatherInfo(val temperature: Int, val code: Int)
+
+private suspend fun fetchWeather(): WeatherInfo? = withContext(Dispatchers.IO) {
+    runCatching {
+        val connection = URL("https://api.open-meteo.com/v1/forecast?latitude=54.75&longitude=25.25&current=temperature_2m,weather_code&timezone=Europe%2FVilnius").openConnection().apply { connectTimeout = 5000; readTimeout = 5000 }
+        val json = JSONObject(connection.getInputStream().bufferedReader().use { it.readText() })
+        val current = json.getJSONObject("current")
+        WeatherInfo(current.getDouble("temperature_2m").toInt(), current.getInt("weather_code"))
+    }.getOrNull()
+}
+
+@Composable
+private fun WeatherChip(info: WeatherInfo) {
+    val icon = when (info.code) { 0 -> "☀"; 1, 2 -> "◐"; 3 -> "☁"; 45, 48 -> "≋"; in 51..67 -> "☂"; in 71..86 -> "❄"; in 95..99 -> "⚡"; else -> "☁" }
+    Text(icon + "  " + info.temperature + "°  Vilnius", color = Color.White.copy(alpha = .9f), fontSize = 16.sp, fontWeight = FontWeight.Light)
+}
+
 @Composable
 private fun AmberHome() {
     val context = LocalContext.current
@@ -90,6 +113,8 @@ private fun AmberHome() {
     var mono by remember { mutableStateOf(prefs.getBoolean(KEY_MONO, false)) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
     var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpapers.indices)) }
+    var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
+    var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var dock by remember {
         mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: apps.map { it.packageName })
     }
@@ -99,7 +124,7 @@ private fun AmberHome() {
         runCatching { context.startActivity(Intent(Intent.ACTION_MAIN).setClassName(app.packageName, app.activityName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
     BackHandler(screen != Screen.HOME) { screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
-    LaunchedEffect(Unit) { while (true) { delay(30_000); now = LocalDateTime.now() } }
+    LaunchedEffect(showWeather) { while (true) { now = LocalDateTime.now(); if (showWeather) weather = fetchWeather(); delay(30 * 60 * 1000L) } }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF17232C))) {
@@ -110,7 +135,10 @@ private fun AmberHome() {
         when (screen) {
             Screen.HOME -> {
                 Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 34.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
+                        if (showWeather && weather != null) WeatherChip(weather!!)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         HeaderButton(Icons.Default.Photo, "Wallpaper") { wallpaperChoice = (wallpaperChoice + 1) % wallpapers.size; prefs.edit().putInt(KEY_WALLPAPER, wallpaperChoice).apply() }
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
@@ -119,9 +147,16 @@ private fun AmberHome() {
                 }
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
                 if (dockApps.isEmpty()) Text("Your dock is empty. Open Launcher Settings to add apps.", color = Color.White, modifier = Modifier.align(Alignment.Center), fontSize = 20.sp)
-                else Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 104.dp).height(142.dp).clip(RoundedCornerShape(30.dp)).background(Color(0xB51A242B)).border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(30.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        items(dockApps, key = { it.packageName }) { app -> AppDockItem(app, mono, font) { launch(app) } }
+                else {
+                    val dockShape = RoundedCornerShape(30.dp)
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 104.dp).height(142.dp)) {
+                        AsyncImage(wallpapers[wallpaperChoice], null, Modifier.fillMaxSize().blur(26.dp).clip(dockShape), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0xA80A1118), Color(0xB80A1118), Color(0xA80A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
+                        LazyRow(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            items(dockApps, key = { it.packageName }) { app -> AppDockItem(app, mono, font) { launch(app) } }
+                        }
+                        Box(Modifier.align(Alignment.CenterStart).fillMaxHeight().width(42.dp).background(Brush.horizontalGradient(listOf(Color(0x550A1118), Color.Transparent))))
+                        Box(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(42.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0x550A1118)))))
                     }
                 }
             }
@@ -129,6 +164,8 @@ private fun AmberHome() {
                 onMono = { mono = it; prefs.edit().putBoolean(KEY_MONO, it).apply() },
                 onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
                 onWallpaper = { wallpaperChoice = (wallpaperChoice + 1) % wallpapers.size; prefs.edit().putInt(KEY_WALLPAPER, wallpaperChoice).apply() },
+                showWeather = showWeather,
+                onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
                 onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
@@ -143,8 +180,8 @@ private fun AmberHome() {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    TvSurface(onClick, Modifier.size(62.dp, 54.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x22000000), focusedContainerColor = Color(0x66FFFFFF)),
+    TvSurface(onClick, Modifier.size(48.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x35FFFFFF)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(25.dp)) }
     }
@@ -159,13 +196,14 @@ private fun ScreenTitle(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(mono: Boolean, fontChoice: Int, wallpaperChoice: Int, onMono: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(mono: Boolean, fontChoice: Int, wallpaperChoice: Int, showWeather: Boolean, onWeather: (Boolean) -> Unit, onMono: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 34.dp, bottom = 28.dp)) {
         ScreenTitle("Amber TV Settings", onBack); Spacer(Modifier.height(22.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { SettingRow("App icons", if (mono) "Black & white" else "Full color", "Press OK to change") { onMono(!mono) } }
             item { SettingRow("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Press OK to cycle fonts", onFont) }
             item { SettingRow("Wallpaper", "Wallpaper " + (wallpaperChoice + 1) + " of " + wallpapers.size, "Press OK to change background", onWallpaper) }
+            item { SettingRow("Home screen weather", if (showWeather) "Shown · Vilnius" else "Off", "Show current temperature and conditions", { onWeather(!showWeather) }) }
             item { SettingRow("Manage dock apps", "Choose, reorder and remove apps", "Open dock manager", onManage) }
             item { SettingRow("All apps", "Browse every installed app", "Open app library", onAllApps) }
             item { SettingRow("Android system settings", "Network, display, device preferences", "Open Android settings", onSystem) }
@@ -249,10 +287,10 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
     val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
     TvSurface(onClick, Modifier.width(160.dp).height(124.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x45FFFFFF)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x25FFFFFF)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(bitmap, app.label, Modifier.size(48.dp), contentScale = ContentScale.Fit,
+            Image(bitmap, app.label, Modifier.size(58.dp), contentScale = ContentScale.Fit,
                 colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.height(8.dp))
             Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
