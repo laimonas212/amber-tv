@@ -28,11 +28,13 @@ Diagnostics supplied by the owner:
 
 ## Build
 
-Requirements: JDK 17 and Android SDK (platform 34; build tools 34.x).
+Requirements: JDK 17, Gradle 8.9, and Android SDK Platform 35 (Android 14 TV device is supported; the app targets API 34).
 
 ```bash
-./gradlew assembleDebug
+gradle :app:assembleDebug
 ```
+
+Open the project in Android Studio as an alternative and let it sync the Gradle project.
 
 Install without changing the default launcher:
 
