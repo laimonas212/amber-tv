@@ -342,6 +342,10 @@ private fun WallpaperLibraryScreen(
     mono: Boolean, font: FontFamily, onSelect: (Int) -> Unit, onBack: () -> Unit
 ) {
     var category by remember { mutableStateOf("All") }
+    var focusedIndex by remember { mutableIntStateOf(selectedIndex) }
+    var previewIndex by remember { mutableIntStateOf(selectedIndex) }
+    LaunchedEffect(focusedIndex) { delay(90); previewIndex = focusedIndex }
+    LaunchedEffect(selectedIndex) { focusedIndex = selectedIndex; previewIndex = selectedIndex }
     val categories = listOf("All") + wallpapers.map { it.category }.distinct()
     val filtered = wallpapers.withIndex().filter { category == "All" || it.value.category == category }
     Row(Modifier.fillMaxSize().background(Color(0xE9121B22)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
@@ -362,7 +366,7 @@ private fun WallpaperLibraryScreen(
                     val wallpaper = indexed.value
                     val selected = indexed.index == selectedIndex
                     @OptIn(ExperimentalTvMaterial3Api::class)
-                    TvSurface(onClick = { onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(58.dp),
+                    TvSurface(onClick = { focusedIndex = indexed.index; previewIndex = indexed.index; onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(58.dp).onFocusChanged { if (it.isFocused) focusedIndex = indexed.index },
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
                         colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) Color(0xE6F1F4F4) else Color(0x77202B32), focusedContainerColor = if (selected) Color.White else Color(0xAA526779)),
                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.015f)) {
@@ -379,10 +383,10 @@ private fun WallpaperLibraryScreen(
             }
         }
         Column(Modifier.weight(1.18f).fillMaxHeight().padding(top = 68.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val wallpaper = wallpapers[selectedIndex.coerceIn(wallpapers.indices)]
+            val wallpaper = wallpapers[previewIndex.coerceIn(wallpapers.indices)]
             Crossfade(targetState = wallpaper.id, animationSpec = tween(380), label = "wallpaper-preview") {
                 Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(22.dp)).background(Color(0xFF202A31))) {
-                    AsyncImage(wallpaper.url, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x22000000), Color.Transparent, Color(0x99000000)))))
                     Row(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(horizontal = 20.dp, vertical = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("9:41", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Light, fontFamily = font)
@@ -397,7 +401,7 @@ private fun WallpaperLibraryScreen(
                             Column(Modifier.weight(1f).padding(vertical = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 val icon = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
                                 Image(icon, app.label, Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)), contentScale = ContentScale.Fit,
-                                    colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                                    colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                                 Text(app.label, color = Color.White, fontSize = 8.sp, maxLines = 1, fontFamily = font)
                             }
                         }
