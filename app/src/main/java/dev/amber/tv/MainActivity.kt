@@ -385,10 +385,8 @@ private fun AppDockItem(app: InstalledTvApp, mono: Boolean, font: FontFamily, wi
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
-                val key = event.nativeKeyEvent
-                if (key.action == AndroidKeyEvent.ACTION_DOWN && key.repeatCount >= 1 && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER) { onLongPress(); true }
-                else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT) { onMove(-1); true }
-                else if (wiggle && key.action == AndroidKeyEvent.ACTION_DOWN && key.keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT) { onMove(1); true }
+                if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
+                else if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
                 else false
             }
             .pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
