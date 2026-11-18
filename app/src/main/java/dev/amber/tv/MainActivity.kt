@@ -478,7 +478,7 @@ private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Bo
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(17.dp)), contentScale = ContentScale.Fit,
-                colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.height(10.dp))
             Text(app.label, color = Color.White, fontSize = 15.sp, fontFamily = font, maxLines = 1)
         }
@@ -496,7 +496,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
             items(selected, key = { it.packageName }) { app ->
                 val index = dock.indexOf(app.packageName)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Box(Modifier.weight(1f)) { AppListRow(app, iconMode != 0, font) {} }
+                    Box(Modifier.weight(1f)) { AppListRow(app, iconMode, removeIconBackground, font) {} }
                     SmallAction("↑", index > 0) { onMove(index, -1) }
                     SmallAction("↓", index < dock.lastIndex) { onMove(index, 1) }
                     SmallAction("−", true) { onToggle(app) }
@@ -505,7 +505,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
             item { Text("ADD APPS", color = Color(0xFFD0D9DE), fontSize = 12.sp, letterSpacing = 1.5.sp) }
             items(remaining, key = { "add_" + it.packageName }) { app ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { AppListRow(app, mono, font) {} }
+                    Box(Modifier.weight(1f)) { AppListRow(app, iconMode, removeIconBackground, font) {} }
                     SmallAction("+", true) { onToggle(app) }
                 }
             }
@@ -514,13 +514,13 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
 }
 
 @Composable
-private fun AppListRow(app: InstalledTvApp, mono: Boolean, font: FontFamily, onClick: () -> Unit) {
+private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 96).asImageBitmap() }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xAA18232C), focusedContainerColor = Color(0xDD435563))) {
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(bitmap, app.label, Modifier.size(34.dp), colorFilter = if (mono) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+            Image(bitmap, app.label, Modifier.size(34.dp), colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.width(16.dp)); Text(app.label, color = Color.White, fontSize = 16.sp, fontFamily = font)
         }
     }
@@ -538,9 +538,9 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
-    val bitmap = remember(app.packageName) { app.icon.toBitmap(160, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
-        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { if (it.isFocused) onFocused() }
+        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
                 if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
                 else if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
