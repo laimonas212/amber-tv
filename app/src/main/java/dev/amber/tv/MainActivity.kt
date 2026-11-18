@@ -321,8 +321,7 @@ private fun WallpaperLibraryScreen(
         }
         LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(filtered.size) { position ->
-                val indexed = filtered[position]
+            gridItems(filtered, key = { it.value.id }) { indexed ->
                 val wallpaper = indexed.value
                 val selected = indexed.index == selectedIndex
                 @OptIn(ExperimentalTvMaterial3Api::class)
