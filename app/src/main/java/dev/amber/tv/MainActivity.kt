@@ -86,7 +86,7 @@ private const val KEY_ICON_NO_BG = "icon_no_adaptive_background"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
-private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url, val credit: String = "Unsplash")
+private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
 private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpapers.json"
 
