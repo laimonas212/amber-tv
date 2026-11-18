@@ -74,28 +74,65 @@ private const val KEY_MONO = "monochrome_icons"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
-private val wallpapers = listOf(
-    "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=2400&q=85",
-    "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=2400&q=85"
+private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url, val credit: String = "Unsplash")
+
+private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpapers.json"
+
+private val defaultWallpapers = listOf(
+    WallpaperItem("nature-1", "Ocean", "Nature", "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-2", "Mountain Lake", "Nature", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-3", "Alpine Lake", "Nature", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-4", "Sea", "Nature", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-5", "Golden Hour", "Nature", "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-6", "Lake View", "Nature", "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-7", "Wildlife", "Nature", "https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-8", "Mountain Peaks", "Nature", "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-9", "Forest", "Nature", "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-10", "Open Landscape", "Nature", "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-11", "Lake Reflection", "Nature", "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-12", "Desert", "Nature", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-13", "Nature", "Nature", "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-14", "Greenery", "Nature", "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-15", "Forest Canopy", "Nature", "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-16", "Tropical Beach", "Nature", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-17", "Mountain Valley", "Nature", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-18", "Rolling Hills", "Nature", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-19", "Flowers", "Nature", "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("nature-20", "Meadow", "Nature", "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=2400&q=85"),
+    WallpaperItem("abstract-fluid", "Fluid Gradient", "Abstract", "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-spectrum", "Spectrum", "Abstract", "https://images.unsplash.com/photo-1557682250-33bd709cbe85?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-glow", "Soft Glow", "Abstract", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-liquid", "Liquid Forms", "Abstract", "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-orbit", "Orbit", "Abstract", "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-glass", "Glass Light", "Abstract", "https://images.unsplash.com/photo-1618556450994-a6a128ef0d9d?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-wave", "Color Wave", "Abstract", "https://images.unsplash.com/photo-1634986666676-ec8fd927c23d?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-neon", "Neon Flow", "Abstract", "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-silk", "Silk Motion", "Abstract", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=2400&q=90"),
+    WallpaperItem("abstract-gradient", "Aurora Gradient", "Abstract", "https://images.unsplash.com/photo-1557683311-eac922347aa1?auto=format&fit=crop&w=2400&q=90"),
 )
+
+private suspend fun fetchRemoteWallpapers(): List<WallpaperItem> = withContext(Dispatchers.IO) {
+    runCatching {
+        val connection = URL(WALLPAPER_CATALOG_URL).openConnection().apply { connectTimeout = 5000; readTimeout = 7000 }
+        val root = JSONObject(connection.getInputStream().bufferedReader().use { it.readText() })
+        val items = root.getJSONArray("wallpapers")
+        buildList {
+            for (i in 0 until items.length()) {
+                val item = items.getJSONObject(i)
+                val url = item.optString("url")
+                if (url.startsWith("https://")) add(WallpaperItem(
+                    id = item.optString("id", "remote-$i"),
+                    title = item.optString("title", "Wallpaper"),
+                    category = item.optString("category", "Featured"),
+                    url = url,
+                    thumbnail = item.optString("thumbnail", url).takeIf { it.startsWith("https://") } ?: url,
+                    credit = item.optString("credit", "")
+                ))
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,7 +142,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
-private enum class Screen { HOME, SETTINGS, ALL_APPS, MANAGE_DOCK }
+private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
 
 private fun loadInstalledTvApps(pm: PackageManager): List<InstalledTvApp> {
     val resolved = listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER).flatMap { category ->
@@ -146,7 +183,8 @@ private fun AmberHome() {
     var screen by remember { mutableStateOf(Screen.HOME) }
     var mono by remember { mutableStateOf(prefs.getBoolean(KEY_MONO, false)) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
-    var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpapers.indices)) }
+    var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(defaultWallpapers.indices)) }
+    var wallpaperItems by remember { mutableStateOf(defaultWallpapers) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var dockWiggle by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
@@ -163,10 +201,11 @@ private fun AmberHome() {
     }
     BackHandler(screen != Screen.HOME || dockWiggle) { if (dockWiggle) dockWiggle = false else screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     LaunchedEffect(showWeather) { while (true) { now = LocalDateTime.now(); if (showWeather) weather = fetchWeather(); delay(30 * 60 * 1000L) } }
+    LaunchedEffect(Unit) { val remote = fetchRemoteWallpapers(); if (remote.isNotEmpty()) { wallpaperItems = (defaultWallpapers + remote).distinctBy { it.id }; wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpaperItems.indices) } }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF17232C))) {
-        AsyncImage(wallpapers[wallpaperChoice], null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        AsyncImage(wallpaperItems[wallpaperChoice].url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colorStops = arrayOf(
             0f to Color(0x1807131D), .48f to Color(0x0807131D), .72f to Color(0x5507131D), 1f to Color(0xA807131D)
         ))))
@@ -178,7 +217,7 @@ private fun AmberHome() {
                         if (showWeather && weather != null) WeatherChip(weather!!)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        HeaderButton(Icons.Default.Photo, "Wallpaper") { wallpaperChoice = (wallpaperChoice + 1) % wallpapers.size; prefs.edit().putInt(KEY_WALLPAPER, wallpaperChoice).apply() }
+                        HeaderButton(Icons.Default.Photo, "Wallpapers") { screen = Screen.WALLPAPERS }
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -188,7 +227,7 @@ private fun AmberHome() {
                 else {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        AsyncImage(wallpapers[wallpaperChoice], null, Modifier.fillMaxSize().blur(8.dp).clip(dockShape), contentScale = ContentScale.Crop)
+                        AsyncImage(wallpaperItems[wallpaperChoice].url, null, Modifier.fillMaxSize().blur(8.dp).clip(dockShape), contentScale = ContentScale.Crop)
                         Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0x680A1118), Color(0x780A1118), Color(0x680A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
                         LazyRow(
                             state = dockListState,
@@ -220,15 +259,16 @@ private fun AmberHome() {
                     }
                 }
             }
-            Screen.SETTINGS -> SettingsScreen(mono, fontChoice, wallpaperChoice,
+            Screen.SETTINGS -> SettingsScreen(mono, fontChoice, wallpaperChoice, wallpaperItems.size,
                 onMono = { mono = it; prefs.edit().putBoolean(KEY_MONO, it).apply() },
                 onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
-                onWallpaper = { wallpaperChoice = (wallpaperChoice + 1) % wallpapers.size; prefs.edit().putInt(KEY_WALLPAPER, wallpaperChoice).apply() },
+                onWallpaper = { screen = Screen.WALLPAPERS },
                 showWeather = showWeather,
                 onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
                 onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
+            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).apply(); screen = Screen.HOME }, onBack = { screen = Screen.HOME })
             Screen.ALL_APPS -> AppListScreen("All apps", apps, mono, font, { screen = Screen.HOME }, ::launch)
             Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, mono, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
@@ -256,14 +296,68 @@ private fun ScreenTitle(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(mono: Boolean, fontChoice: Int, wallpaperChoice: Int, showWeather: Boolean, onWeather: (Boolean) -> Unit, onMono: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun WallpaperLibraryScreen(
+    wallpapers: List<WallpaperItem>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onBack: () -> Unit
+) {
+    var category by remember { mutableStateOf("All") }
+    val categories = listOf("All") + wallpapers.map { it.category }.distinct()
+    val filtered = wallpapers.withIndex().filter { category == "All" || it.value.category == category }
+    Column(Modifier.fillMaxSize().padding(start = 68.dp, end = 68.dp, top = 24.dp, bottom = 20.dp)) {
+        ScreenTitle("Wallpaper Library", onBack)
+        Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .66f), fontSize = 14.sp,
+            modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+            items(categories) { item ->
+                @OptIn(ExperimentalTvMaterial3Api::class)
+                TvSurface(onClick = { category = item }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
+                    colors = ClickableSurfaceDefaults.colors(containerColor = if (category == item) Color(0xCC607D91) else Color(0x66202E3A),
+                        focusedContainerColor = Color(0xDD607D91))) {
+                    Text(item, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp))
+                }
+            }
+        }
+        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            items(filtered.size) { position ->
+                val indexed = filtered[position]
+                val wallpaper = indexed.value
+                val selected = indexed.index == selectedIndex
+                @OptIn(ExperimentalTvMaterial3Api::class)
+                TvSurface(onClick = { onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(142.dp),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                    colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x66202E3A), focusedContainerColor = Color(0xAA526779)),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.035f)) {
+                    Box(Modifier.fillMaxSize()) {
+                        AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xD9000000)))))
+                        Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                            Text(wallpaper.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(wallpaper.category, color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
+                        }
+                        if (selected) {
+                            Box(Modifier.align(Alignment.TopEnd).padding(8.dp).background(Color(0xDDFFFFFF), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 4.dp)) {
+                                Text("Selected", color = Color(0xFF17232C), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(mono: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showWeather: Boolean, onWeather: (Boolean) -> Unit, onMono: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { SettingsTile("Appearance", if (mono) "Monochrome icons" else "Full color icons", "Personalize the interface", "◈") { onMono(!mono) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
-            item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of ${wallpapers.size} backgrounds", "Explore scenic backgrounds", "▧", onWallpaper) }
+            item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
             item { SettingsTile("Customize Dock", "Add, remove and rearrange", "Choose your favorite apps", "▤", onManage) }
             item { SettingsTile("App Library", "Browse installed apps", "Open all applications", "▦", onAllApps) }
