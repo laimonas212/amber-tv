@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "wallpapers": [
+    {
+      "id": "cloud-01",
+      "title": "Aurora Flow",
+      "category": "Abstract",
+      "url": "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=2400&q=90",
+      "thumbnail": "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=700&q=75",
+      "credit": "Unsplash"
+    },
+    {
+      "id": "cloud-02",
+      "title": "Color Spectrum",
+      "category": "Abstract",
+      "url": "https://images.unsplash.com/photo-1557682250-33bd709cbe85?auto=format&fit=crop&w=2400&q=90",
+      "thumbnail": "https://images.unsplash.com/photo-1557682250-33bd709cbe85?auto=format&fit=crop&w=700&q=75",
+      "credit": "Unsplash"
+    },
+    {
+      "id": "cloud-03",
+      "title": "Glass Light",
+      "category": "Abstract",
+      "url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=2400&q=90",
+      "thumbnail": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=700&q=75",
+      "credit": "Unsplash"
+    },
+    {
+      "id": "cloud-04",
+      "title": "Liquid Forms",
+      "category": "Abstract",
+      "url": "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=2400&q=90",
+      "thumbnail": "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=700&q=75",
+      "credit": "Unsplash"
+    },
+    {
+      "id": "cloud-05",
+      "title": "Orbit",
+      "category": "Abstract",
+      "url": "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=2400&q=90",
+      "thumbnail": "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=700&q=75",
+      "credit": "Unsplash"
+    }
+  ]
+}
