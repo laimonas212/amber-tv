@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +21,6 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,7 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.ClickableSurface
+import androidx.tv.material3.Surface as TvSurface
 import androidx.tv.material3.ClickableSurfaceDefaults
 import java.time.LocalDate
 import java.time.LocalTime
@@ -229,7 +227,7 @@ private fun AppTile(
     onSelected: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ClickableSurface(
+    TvSurface(
         onClick = onSelected,
         modifier = modifier
             .height(116.dp)
