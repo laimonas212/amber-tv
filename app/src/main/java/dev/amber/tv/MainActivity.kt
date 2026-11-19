@@ -338,7 +338,6 @@ private fun AmberHome() {
                     }
                 }
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
-                {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
                         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
@@ -392,7 +391,6 @@ private fun AmberHome() {
                             }
                         }
                     }
-                }
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
