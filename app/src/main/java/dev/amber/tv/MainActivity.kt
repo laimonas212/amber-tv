@@ -685,6 +685,79 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun AddDockButton(onClick: () -> Unit) {
+    TvSurface(onClick, Modifier.size(92.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x44202E3A), focusedContainerColor = Color(0xAA526779)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("+", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Light)
+        }
+    }
+}
+
+@Composable
+private fun DockActionDialog(app: InstalledTvApp, onDismiss: () -> Unit, onMove: () -> Unit, onRemove: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.width(360.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xF21B2832)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(22.dp)).padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(app.label, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Text("What would you like to do?", color = Color.White.copy(alpha = .65f), fontSize = 14.sp)
+            DialogAction("Move", "Reposition this app in the dock", onMove)
+            DialogAction("Remove", "Take this app out of the dock", onRemove)
+            DialogAction("Cancel", "Keep it where it is", onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun DialogAction(title: String, subtitle: String, onClick: () -> Unit) {
+    @OptIn(ExperimentalTvMaterial3Api::class)
+    TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x552F414D), focusedContainerColor = Color(0xCC9A632F))) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column { Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold); Text(subtitle, color = Color.White.copy(alpha = .6f), fontSize = 11.sp) }
+        }
+    }
+}
+
+@Composable
+private fun AddDockDialog(apps: List<InstalledTvApp>, iconMode: Int, removeIconBackground: Boolean, font: FontFamily,
+    onAdd: (List<InstalledTvApp>) -> Unit, onClose: () -> Unit) {
+    var selected by remember { mutableStateOf(emptySet<String>()) }
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.fillMaxWidth(.88f).fillMaxHeight(.82f).clip(RoundedCornerShape(24.dp)).background(Color(0xF21B2832)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(24.dp)).padding(22.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Add apps to Dock", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (selected.isEmpty()) "Choose the apps you want to pin" else "${selected.size} selected", color = Color.White.copy(alpha = .62f), fontSize = 13.sp)
+                }
+                DialogAction("Close · Add", "Add selected apps and close", { onAdd(apps.filter { it.packageName in selected }); onClose() })
+            }
+            Spacer(Modifier.height(14.dp))
+            LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                gridItems(apps, key = { it.packageName }) { app ->
+                    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 120).asImageBitmap() }
+                    @OptIn(ExperimentalTvMaterial3Api::class)
+                    TvSurface(onClick = { selected = if (app.packageName in selected) selected - app.packageName else selected + app.packageName },
+                        modifier = Modifier.height(112.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (app.packageName in selected) Color(0xAA9A632F) else Color(0x66334450), focusedContainerColor = Color(0xCC526779))) {
+                        Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Image(bitmap, app.label, Modifier.size(48.dp).clip(RoundedCornerShape(if (removeIconBackground) 12.dp else 4.dp)), contentScale = ContentScale.Fit,
+                                colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                            Spacer(Modifier.height(6.dp))
+                            Text(app.label, color = Color.White, fontSize = 11.sp, fontFamily = font, maxLines = 1)
+                            if (app.packageName in selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
@@ -692,14 +765,14 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
     var focused by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+            .graphicsLayer { if (isMoving) { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } }
             .onKeyEvent { event ->
                 if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
                 else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
-                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.Enter) { onClick(); true }
+                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionCenter) { onClick(); true }
                 else false
             }
             .pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
-            modifier = if (isMoving) Modifier.graphicsLayer { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } else Modifier,
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
