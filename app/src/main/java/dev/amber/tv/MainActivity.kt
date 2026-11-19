@@ -90,62 +90,43 @@ private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
 private const val KEY_SHOW_APP_NAMES = "show_app_names"
+private const val KEY_WALLPAPER_CACHE = "remote_wallpaper_catalog"
 private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
 private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpapers.json"
 
-private val defaultWallpapers = listOf(
-    WallpaperItem("nature-1", "Ocean", "Nature", "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-2", "Mountain Lake", "Nature", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-3", "Alpine Lake", "Nature", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-4", "Sea", "Nature", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-5", "Golden Hour", "Nature", "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-6", "Lake View", "Nature", "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-7", "Wildlife", "Nature", "https://images.unsplash.com/photo-1472396961693-142e6e269027?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-8", "Mountain Peaks", "Nature", "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-9", "Forest", "Nature", "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-10", "Open Landscape", "Nature", "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-11", "Lake Reflection", "Nature", "https://images.unsplash.com/photo-1439066615861-d1af74d74000?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-12", "Desert", "Nature", "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-13", "Nature", "Nature", "https://images.unsplash.com/photo-1469474968028-56623f02e42e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-14", "Greenery", "Nature", "https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-15", "Forest Canopy", "Nature", "https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-16", "Tropical Beach", "Nature", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-17", "Mountain Valley", "Nature", "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-18", "Rolling Hills", "Nature", "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-19", "Flowers", "Nature", "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("nature-20", "Meadow", "Nature", "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=2400&q=85"),
-    WallpaperItem("abstract-fluid", "Fluid Gradient", "Abstract", "https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-spectrum", "Spectrum", "Abstract", "https://images.unsplash.com/photo-1557682250-33bd709cbe85?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-glow", "Soft Glow", "Abstract", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-liquid", "Liquid Forms", "Abstract", "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-orbit", "Orbit", "Abstract", "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-glass", "Glass Light", "Abstract", "https://images.unsplash.com/photo-1618556450994-a6a128ef0d9d?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-wave", "Color Wave", "Abstract", "https://images.unsplash.com/photo-1634986666676-ec8fd927c23d?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-neon", "Neon Flow", "Abstract", "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-silk", "Silk Motion", "Abstract", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=2400&q=90"),
-    WallpaperItem("abstract-gradient", "Aurora Gradient", "Abstract", "https://images.unsplash.com/photo-1557683311-eac922347aa1?auto=format&fit=crop&w=2400&q=90"),
-)
+private val defaultWallpapers = emptyList<WallpaperItem>()
+
+private fun parseWallpaperCatalog(raw: String): List<WallpaperItem> {
+    val items = JSONObject(raw).getJSONArray("wallpapers")
+    return buildList {
+        for (i in 0 until items.length()) {
+            val item = items.getJSONObject(i)
+            val url = item.optString("url")
+            if (url.startsWith("https://")) add(WallpaperItem(
+                id = item.optString("id", "remote-$i"),
+                title = item.optString("title", "Wallpaper"),
+                category = item.optString("category", "Featured"),
+                url = url,
+                thumbnail = item.optString("thumbnail", url).takeIf { it.startsWith("https://") } ?: url,
+                credit = item.optString("credit", "")
+            ))
+        }
+    }
+}
 
 private suspend fun fetchRemoteWallpapers(): List<WallpaperItem> = withContext(Dispatchers.IO) {
     runCatching {
-        val connection = URL(WALLPAPER_CATALOG_URL).openConnection().apply { connectTimeout = 5000; readTimeout = 7000 }
-        val root = JSONObject(connection.getInputStream().bufferedReader().use { it.readText() })
-        val items = root.getJSONArray("wallpapers")
-        buildList {
-            for (i in 0 until items.length()) {
-                val item = items.getJSONObject(i)
-                val url = item.optString("url")
-                if (url.startsWith("https://")) add(WallpaperItem(
-                    id = item.optString("id", "remote-$i"),
-                    title = item.optString("title", "Wallpaper"),
-                    category = item.optString("category", "Featured"),
-                    url = url,
-                    thumbnail = item.optString("thumbnail", url).takeIf { it.startsWith("https://") } ?: url,
-                    credit = item.optString("credit", "")
-                ))
-            }
+        val connection = URL(WALLPAPER_CATALOG_URL).openConnection().apply {
+            connectTimeout = 10000
+            readTimeout = 12000
+            useCaches = false
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Pragma", "no-cache")
+            setRequestProperty("User-Agent", "AmberTV/1.0")
         }
+        val raw = connection.getInputStream().bufferedReader().use { it.readText() }
+        parseWallpaperCatalog(raw).also { require(it.isNotEmpty()) { "Wallpaper catalog is empty" } }
     }.getOrDefault(emptyList())
 }
 
@@ -243,8 +224,10 @@ private fun AmberHome() {
     val mono = iconMode != 0
     var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
-    var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceIn(defaultWallpapers.indices)) }
-    var wallpaperItems by remember { mutableStateOf(defaultWallpapers) }
+    var wallpaperItems by remember {
+        mutableStateOf(runCatching { parseWallpaperCatalog(prefs.getString(KEY_WALLPAPER_CACHE, null).orEmpty()) }.getOrDefault(emptyList()))
+    }
+    var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceAtLeast(0)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
     var dockWiggle by remember { mutableStateOf(false) }
@@ -274,21 +257,39 @@ private fun AmberHome() {
             }
         }
     }
-    // Weather is independent from the clock and refreshes only every 30 minutes.
+    // Retry weather more frequently after failures; use a longer interval once it works.
     LaunchedEffect(showWeather) {
         if (showWeather) {
             while (true) {
-                weather = fetchWeather()
-                delay(30 * 60 * 1000L)
+                val result = fetchWeather()
+                weather = result
+                delay(if (result == null) 2 * 60 * 1000L else 30 * 60 * 1000L)
             }
+        } else {
+            weather = null
         }
     }
-    LaunchedEffect(Unit) { delay(2200); splashVisible = false }
-    LaunchedEffect(Unit) { val remote = fetchRemoteWallpapers(); if (remote.isNotEmpty()) { wallpaperItems = (defaultWallpapers + remote).distinctBy { it.id }; wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(wallpaperItems.indices) } }
+    LaunchedEffect(Unit) { delay(1800); splashVisible = false }
+    // The web catalog is the only wallpaper source. Keep its last successful copy as an offline cache.
+    LaunchedEffect(Unit) {
+        while (true) {
+            val remote = fetchRemoteWallpapers()
+            if (remote.isNotEmpty()) {
+                wallpaperItems = remote
+                wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(remote.indices)
+                prefs.edit().putString(KEY_WALLPAPER_CACHE, URL(WALLPAPER_CATALOG_URL).openConnection().apply {
+                    connectTimeout = 10000; readTimeout = 12000; useCaches = false
+                }.getInputStream().bufferedReader().use { it.readText() }).apply()
+            }
+            delay(if (remote.isEmpty()) 2 * 60 * 1000L else 6 * 60 * 60 * 1000L)
+        }
+    }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF17232C))) {
-        AsyncImage(wallpaperItems[wallpaperChoice].url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
+            AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colorStops = arrayOf(
             0f to Color(0x1807131D), .48f to Color(0x0807131D), .72f to Color(0x5507131D), 1f to Color(0xA807131D)
         ))))
@@ -309,7 +310,9 @@ private fun AmberHome() {
                 else {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        AsyncImage(wallpaperItems[wallpaperChoice].url, null, Modifier.fillMaxSize().blur(8.dp).clip(dockShape), contentScale = ContentScale.Crop)
+                        wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
+                            AsyncImage(wallpaper.url, null, Modifier.fillMaxSize().blur(8.dp).clip(dockShape), contentScale = ContentScale.Crop)
+                        }
                         Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0x680A1118), Color(0x780A1118), Color(0x680A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
                         LazyRow(
                             state = dockListState,
@@ -367,7 +370,15 @@ private fun AmberHome() {
                 onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
-            Screen.WALLPAPERS -> WallpaperLibraryScreen(wallpaperItems, wallpaperChoice, dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS })
+            Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
+                Box(Modifier.fillMaxSize().background(Color(0xE9121B22)), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text("Wallpaper library is temporarily unavailable", color = Color.White, fontSize = 20.sp)
+                        Text("Amber TV will retry automatically when the server is reachable.", color = Color.White.copy(alpha = .65f), fontSize = 14.sp)
+                        HeaderButton(Icons.Default.ArrowBack, "Back") { screen = Screen.SETTINGS }
+                    }
+                }
+            }
             Screen.ALL_APPS -> AppListScreen("All apps", apps, iconMode, removeIconBackground, font, { screen = Screen.HOME }, ::launch)
             Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, iconMode, removeIconBackground, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
@@ -385,24 +396,24 @@ private fun AmberBootSplash() {
     val glowAlpha = transition.animateFloat(0.07f, 0.13f, infiniteRepeatable(tween(1900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow-alpha")
     val scale = transition.animateFloat(0.985f, 1.015f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
     Box(Modifier.fillMaxSize().background(Color(0xFF050607)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Box(contentAlignment = Alignment.Center) {
                 // Glow follows the crystal silhouette and stays clear of the wordmark.
                 Image(
                     icon,
                     null,
-                    Modifier.size(184.dp).graphicsLayer { alpha = glowAlpha.value }.blur(19.dp),
+                    Modifier.size(62.dp).graphicsLayer { alpha = glowAlpha.value }.blur(7.dp),
                     contentScale = ContentScale.Fit,
                     colorFilter = ColorFilter.tint(Color(0xFFFFA52B))
                 )
                 Image(
                     icon,
                     "Amber crystal",
-                    Modifier.size(176.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+                    Modifier.size(58.dp).graphicsLayer { scaleX = scale.value; scaleY = scale.value },
                     contentScale = ContentScale.Fit
                 )
             }
-            Text("AMBER TV", color = Color.White.copy(alpha = 0.88f), fontSize = 17.sp, fontWeight = FontWeight.Medium, letterSpacing = 5.sp)
+            Text("AMBER TV", color = Color.White.copy(alpha = 0.88f), fontSize = 7.sp, fontWeight = FontWeight.Medium, letterSpacing = 2.sp)
         }
     }
 }
