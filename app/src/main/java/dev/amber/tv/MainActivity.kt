@@ -1,6 +1,8 @@
 package dev.amber.tv
 
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.AdaptiveIconDrawable
@@ -68,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.core.content.ContextCompat
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme as TvMaterialTheme
@@ -237,6 +240,23 @@ private fun AmberHome() {
     var dockScrollJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
+    var wakeRefreshTick by remember { mutableIntStateOf(0) }
+    // Android TV's POWER button usually suspends the display without killing this process.
+    // Listen for the screen waking so remote services refresh immediately instead of waiting for the next timer.
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: android.content.Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_ON) wakeRefreshTick++
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(Intent.ACTION_SCREEN_ON),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
     var dock by remember {
         mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: apps.map { it.packageName })
     }
@@ -258,7 +278,7 @@ private fun AmberHome() {
         }
     }
     // Retry weather more frequently after failures; use a longer interval once it works.
-    LaunchedEffect(showWeather) {
+    LaunchedEffect(showWeather, wakeRefreshTick) {
         if (showWeather) {
             while (true) {
                 val result = fetchWeather()
@@ -271,7 +291,7 @@ private fun AmberHome() {
     }
     LaunchedEffect(Unit) { delay(1800); splashVisible = false }
     // The web catalog is the only wallpaper source. Keep its last successful copy as an offline cache.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(wakeRefreshTick) {
         while (true) {
             val remote = fetchRemoteWallpapers()
             if (remote.isNotEmpty()) {
