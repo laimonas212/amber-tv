@@ -97,6 +97,9 @@ private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
 private const val KEY_SHOW_APP_NAMES = "show_app_names"
+private const val KEY_THEME_MODE = "theme_mode"
+private const val KEY_ACCENT = "theme_accent"
+private const val KEY_SURFACE = "theme_surface"
 private const val KEY_WALLPAPER_CACHE = "remote_wallpaper_catalog"
 private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
@@ -250,6 +253,13 @@ private fun WeatherChip(info: WeatherInfo) {
 private fun AmberHome() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, 0) }
+    var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 1)) }
+    var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 4)) }
+    var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 4)) }
+    val accentColors = listOf(Color(0xFF78B7FF), Color(0xFFB69CFF), Color(0xFF72D6C1), Color(0xFFFFB86B), Color(0xFFFF82A8))
+    val surfaceColors = listOf(Color(0xFF17232C), Color(0xFF101820), Color(0xFF25212F), Color(0xFF202A24), Color(0xFF282828))
+    val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
+    val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
     val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
     var screen by remember { mutableStateOf(Screen.HOME) }
     var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
@@ -343,16 +353,14 @@ private fun AmberHome() {
     }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFF17232C))) {
+    Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(colorStops = arrayOf(
-            0f to Color(0x1807131D), .48f to Color(0x0807131D), .72f to Color(0x5507131D), 1f to Color(0xA807131D)
-        ))))
         when (screen) {
             Screen.HOME -> {
-                Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 34.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x880A1118)).padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
                         if (showWeather) {
@@ -360,7 +368,8 @@ private fun AmberHome() {
                             else Text("Weather unavailable · retrying", color = Color.White.copy(alpha = .65f), fontSize = 13.sp)
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    }
+                    Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x880A1118)).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -432,6 +441,10 @@ private fun AmberHome() {
                     }
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
+                themeMode = themeMode, accentChoice = accentChoice, surfaceChoice = surfaceChoice,
+                onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
+                onAccent = { accentChoice = (accentChoice + 1) % 5; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
+                onSurface = { surfaceChoice = (surfaceChoice + 1) % 5; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
                 onShowAppNames = { showAppNames = it; prefs.edit().putBoolean(KEY_SHOW_APP_NAMES, it).apply() },
