@@ -724,7 +724,7 @@ private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: I
 @Composable
 private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "")) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
@@ -769,7 +769,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
 @Composable
 private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 96).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "")) { appIconBitmap(context, app, removeIconBackground, 96).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
@@ -880,7 +880,7 @@ private fun AddDockDialog(
                 ) {
                     gridItems(apps, key = { it.packageName }) { app ->
                         val isSelected = app.packageName in selected
-                        val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
+                        val bitmap = remember(app.packageName, removeIconBackground, context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "")) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
                         @OptIn(ExperimentalTvMaterial3Api::class)
                         TvSurface(
                             onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
@@ -929,7 +929,7 @@ private fun AddDockDialog(
 @Composable
 private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "")) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused, isMoving, itemIndex) {
