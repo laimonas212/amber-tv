@@ -29,10 +29,12 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme as Material3Theme
 import androidx.compose.material3.Text
@@ -127,8 +129,6 @@ private const val KEY_SHOW_APP_NAMES = "show_app_names"
 private const val KEY_THEME_MODE = "theme_mode"
 private const val KEY_ACCENT = "theme_accent"
 private const val KEY_SURFACE = "theme_surface"
-private const val KEY_ICON_PACK = "icon_pack_package"
-private const val BUILTIN_ICON_PACK = "__amber_minimal__"
 private const val KEY_WALLPAPER_CACHE = "remote_wallpaper_catalog"
 private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
@@ -203,85 +203,32 @@ class MainActivity : ComponentActivity() {
 }
 
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
-private fun installedIconPacks(pm: PackageManager): List<Pair<String, String>> {
-    val actions = listOf("org.adw.ActivityStarter.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME")
-    return actions.flatMap { action ->
-        @Suppress("DEPRECATION")
-        pm.queryIntentActivities(Intent(action), 0)
-    }.mapNotNull { info ->
-        val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
-        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-        pkg to label
-    }.distinctBy { it.first }.sortedBy { it.second.lowercase() }
-}
-
-private fun packedAppIcon(context: Context, app: InstalledTvApp, packPackage: String): Drawable? = runCatching {
-    val packContext = context.createPackageContext(packPackage, 0)
-    val parser = android.util.Xml.newPullParser()
-    packContext.assets.open("appfilter.xml").use { input ->
-        parser.setInput(input, "UTF-8")
-        var event = parser.eventType
-        while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-            if (event == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "item") {
-                val component = parser.getAttributeValue(null, "component").orEmpty()
-                val drawableName = parser.getAttributeValue(null, "drawable").orEmpty()
-                if (component.contains(app.packageName)) {
-                    val id = packContext.resources.getIdentifier(drawableName, "drawable", packPackage)
-                    if (id != 0) return@use packContext.resources.getDrawable(id, packContext.theme)
-                }
-            }
-            event = parser.next()
-        }
-        null
-    }
-}.getOrNull()
-
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
-    val iconPack = context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, BUILTIN_ICON_PACK).orEmpty()
-    val useAmberMinimal = iconPack.isBlank() || iconPack == BUILTIN_ICON_PACK
-    val drawable = if (useAmberMinimal) app.icon else packedAppIcon(context, app, iconPack) ?: app.icon
-    // Amber Minimal uses the app's original adaptive foreground: real logo, transparent background.
-    // Legacy non-adaptive icons fall back to the original app icon because their background is baked in.
-    val stripBackground = useAmberMinimal || removeAdaptiveBackground
-    val iconDrawable = if (stripBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
+    val drawable = app.icon
+    val iconDrawable = if (removeAdaptiveBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
     val sourceSize = size * 2
     val source = Bitmap.createBitmap(sourceSize, sourceSize, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(source)
     iconDrawable.setBounds(0, 0, sourceSize, sourceSize)
     iconDrawable.draw(canvas)
-    if (!stripBackground) return Bitmap.createScaledBitmap(source, size, size, true)
-
-    // Trim transparent padding, then fit every foreground into the same visual box.
+    if (!removeAdaptiveBackground) return Bitmap.createScaledBitmap(source, size, size, true)
     val pixels = IntArray(sourceSize * sourceSize)
     source.getPixels(pixels, 0, sourceSize, 0, 0, sourceSize, sourceSize)
-    var left = sourceSize
-    var top = sourceSize
-    var right = -1
-    var bottom = -1
-    for (y in 0 until sourceSize) {
-        for (x in 0 until sourceSize) {
-            if ((pixels[y * sourceSize + x] ushr 24) > 12) {
-                if (x < left) left = x
-                if (x > right) right = x
-                if (y < top) top = y
-                if (y > bottom) bottom = y
-            }
-        }
+    var left=sourceSize; var top=sourceSize; var right=-1; var bottom=-1
+    for (y in 0 until sourceSize) for (x in 0 until sourceSize) if ((pixels[y*sourceSize+x] ushr 24)>12) {
+        if(x<left) left=x; if(x>right) right=x; if(y<top) top=y; if(y>bottom) bottom=y
     }
-    if (right < left || bottom < top) return Bitmap.createScaledBitmap(source, size, size, true)
-    val padding = (maxOf(right - left + 1, bottom - top + 1) * 0.07f).toInt()
-    left = (left - padding).coerceAtLeast(0)
-    top = (top - padding).coerceAtLeast(0)
-    right = (right + padding).coerceAtMost(sourceSize - 1)
-    bottom = (bottom + padding).coerceAtMost(sourceSize - 1)
-    val cropped = Bitmap.createBitmap(source, left, top, right - left + 1, bottom - top + 1)
-    val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val outCanvas = Canvas(output)
-    val scale = (size * 0.82f) / maxOf(cropped.width, cropped.height)
-    val width = (cropped.width * scale).toInt()
-    val height = (cropped.height * scale).toInt()
-    val dest = android.graphics.Rect((size - width) / 2, (size - height) / 2, (size + width) / 2, (size + height) / 2)
-    outCanvas.drawBitmap(cropped, null, dest, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+    if(right<left || bottom<top) return Bitmap.createScaledBitmap(source,size,size,true)
+    val pad=(maxOf(right-left+1,bottom-top+1)*.07f).toInt()
+    left=(left-pad).coerceAtLeast(0); top=(top-pad).coerceAtLeast(0)
+    right=(right+pad).coerceAtMost(sourceSize-1); bottom=(bottom+pad).coerceAtMost(sourceSize-1)
+    val cropped=Bitmap.createBitmap(source,left,top,right-left+1,bottom-top+1)
+    val output=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888)
+    val outCanvas=Canvas(output)
+    val scale=(size*.82f)/maxOf(cropped.width,cropped.height)
+    val width=(cropped.width*scale).toInt(); val height=(cropped.height*scale).toInt()
+    val dest=android.graphics.Rect((size-width)/2,(size-height)/2,(size+width)/2,(size+height)/2)
+    outCanvas.drawBitmap(cropped,null,dest,android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
     return output
 }
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
@@ -327,14 +274,12 @@ private fun AmberHome() {
     var profiles by remember { mutableStateOf(readProfiles(context)) }
     var activeProfileId by remember { mutableStateOf(meta.getString("active_profile", profiles.first().id) ?: profiles.first().id) }
     var showProfiles by remember { mutableStateOf(false) }
+    var renameProfile by remember { mutableStateOf<LocalProfile?>(null) }
     val activeProfile = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.first()
     val prefs = remember(activeProfileId) { context.getSharedPreferences("amber_tv_$activeProfileId", 0) }
     var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 1)) }
     var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 10)) }
     var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 9)) }
-    val iconPacks = remember(context) { installedIconPacks(context.packageManager) }
-    var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, BUILTIN_ICON_PACK).orEmpty().ifBlank { BUILTIN_ICON_PACK }) }
-    val iconPackLabel = if (iconPackPackage == BUILTIN_ICON_PACK) "Amber Minimal" else iconPacks.firstOrNull { it.first == iconPackPackage }?.second ?: "Amber Minimal"
     val accentColors = listOf(Color(0xFF78B7FF),Color(0xFFB69CFF),Color(0xFF72D6C1),Color(0xFFFFB86B),Color(0xFFFF82A8),Color(0xFFD0D5DA),Color(0xFFFFA6C9),Color(0xFFFFD166),Color(0xFFFF9B85),Color(0xFFC5A3FF),Color(0xFFA8D98B))
     val surfaceColors = listOf(Color(0xFF17232C),Color(0xFF101820),Color(0xFF25212F),Color(0xFF202A24),Color(0xFF282828),Color(0xFF352432),Color(0xFF382F1D),Color(0xFF3A2925),Color(0xFF29233A),Color(0xFF263329))
     val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
@@ -448,7 +393,7 @@ private fun AmberHome() {
                         }
                     }
                     Row(Modifier.padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ProfileHeaderButton(activeProfile.name) { showProfiles = true }
+                        ProfileHeaderButton { showProfiles = true }
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -521,13 +466,6 @@ private fun AmberHome() {
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 themeMode = themeMode, accentChoice = accentChoice, surfaceChoice = surfaceChoice,
-                iconPackLabel = iconPackLabel, hasIconPacks = true,
-                onIconPack = {
-                    val availablePacks = listOf(BUILTIN_ICON_PACK) + iconPacks.map { it.first }
-                    val current = availablePacks.indexOf(iconPackPackage).coerceAtLeast(0)
-                    iconPackPackage = availablePacks[(current + 1) % availablePacks.size]
-                    prefs.edit().putString(KEY_ICON_PACK, iconPackPackage).apply()
-                },
                 onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
                 onAccent = { accentChoice = (accentChoice + 1) % 11; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
                 onSurface = { surfaceChoice = (surfaceChoice + 1) % 10; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
@@ -564,7 +502,9 @@ private fun AmberHome() {
             onSelect = { p -> activeProfileId=p.id; saveProfiles(context,profiles,p.id); showProfiles=false; activity?.recreate() },
             onAdd = { val id="profile_${System.currentTimeMillis()}"; val name=if(profiles.none { it.name=="Dukra" }) "Dukra" else "Profilis ${profiles.size+1}"; profiles=profiles+LocalProfile(id,name); saveProfiles(context,profiles,activeProfileId) },
             onDelete = { p -> if(profiles.size>1 && p.id!=activeProfileId) { profiles=profiles.filterNot { it.id==p.id }; context.getSharedPreferences("amber_tv_${p.id}",0).edit().clear().apply(); saveProfiles(context,profiles,activeProfileId) } },
+            onRename = { renameProfile = it },
             onClose = { showProfiles=false })
+        renameProfile?.let { profile -> ProfileRenameDialog(profile.name, onSave = { newName -> profiles=profiles.map { if(it.id==profile.id) it.copy(name=newName) else it }; saveProfiles(context,profiles,activeProfileId); renameProfile=null }, onClose = { renameProfile=null }) }
         if (showAddDockDialog) AddDockDialog(apps, dock, iconMode, removeIconBackground, font,
             onApply = { selected -> saveDock(selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
         if (splashVisible) AmberBootSplash()
@@ -604,18 +544,15 @@ private fun AmberBootSplash() {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ProfileHeaderButton(name:String,onClick:()->Unit) {
-    TvSurface(onClick,Modifier.height(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(24.dp)),
+private fun ProfileHeaderButton(onClick:()->Unit) {
+    TvSurface(onClick,Modifier.size(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x18FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus),
         scale=ClickableSurfaceDefaults.scale(focusedScale=1.05f)) {
-        Row(Modifier.padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("●",color=LocalAmberPalette.current.accent,fontSize=17.sp)
-            Text(name,color=Color.White,fontSize=14.sp,fontWeight=FontWeight.Medium)
-        }
+        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Icon(Icons.Default.AccountCircle, "Profiles", tint=Color.White, modifier=Modifier.size(25.dp)) }
     }
 }
 @Composable
-private fun ProfilePickerDialog(profiles:List<LocalProfile>,activeId:String,onSelect:(LocalProfile)->Unit,onAdd:()->Unit,onDelete:(LocalProfile)->Unit,onClose:()->Unit) {
+private fun ProfilePickerDialog(profiles:List<LocalProfile>,activeId:String,onSelect:(LocalProfile)->Unit,onAdd:()->Unit,onDelete:(LocalProfile)->Unit,onRename:(LocalProfile)->Unit,onClose:()->Unit) {
     Dialog(onDismissRequest=onClose) {
         Column(Modifier.width(560.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xF21A242C))
             .border(1.dp,Color(0x55FFFFFF),RoundedCornerShape(28.dp)).padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -634,6 +571,7 @@ private fun ProfilePickerDialog(profiles:List<LocalProfile>,activeId:String,onSe
                             }
                         }
                     }
+                    TvSurface(onClick={onRename(p)},modifier=Modifier.size(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x22FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("✎",color=Color.White,fontSize=20.sp) } }
                     if(profiles.size>1 && p.id!=activeId) TvSurface(onClick={onDelete(p)},modifier=Modifier.size(48.dp),
                         shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x22FFFFFF),focusedContainerColor=Color(0x66B94B55))) {
                         Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("−",color=Color.White,fontSize=23.sp) }
@@ -649,6 +587,22 @@ private fun ProfilePickerDialog(profiles:List<LocalProfile>,activeId:String,onSe
                     colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x223FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) {
                     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("Close",color=Color.White,fontSize=16.sp) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileRenameDialog(currentName:String,onSave:(String)->Unit,onClose:()->Unit) {
+    var name by remember(currentName) { mutableStateOf(currentName) }
+    Dialog(onDismissRequest=onClose) {
+        Column(Modifier.width(460.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xF21A242C))
+            .border(1.dp,Color(0x55FFFFFF),RoundedCornerShape(24.dp)).padding(24.dp), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Text("Rename profile",color=Color.White,fontSize=23.sp,fontWeight=FontWeight.SemiBold)
+            OutlinedTextField(value=name,onValueChange={name=it},singleLine=true,label={Text("Profile name")})
+            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                TvSurface(onClick=onClose,modifier=Modifier.weight(1f).height(50.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x22FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("Cancel",color=Color.White) } }
+                TvSurface(onClick={ if(name.isNotBlank()) onSave(name.trim()) },modifier=Modifier.weight(1f).height(50.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x553D7890),focusedContainerColor=LocalAmberPalette.current.focus)) { Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("Save",color=Color.White) } }
             }
         }
     }
@@ -750,13 +704,12 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, iconPackLabel: String, hasIconPacks: Boolean, onIconPack: () -> Unit, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈", onIconMode) }
-            item { SettingsTile("Icon pack", iconPackLabel, "Original logos · transparent adaptive icons", "▣", onIconPack) }
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
@@ -815,7 +768,7 @@ private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: I
 @Composable
 private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "")) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, "") { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
