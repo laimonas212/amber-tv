@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="#050607" />
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#050607" />
+        </shape>
+    </item>
     <item
         android:drawable="@drawable/amber_crystal"
         android:width="58dp"
