@@ -217,6 +217,8 @@ private fun appIconBitmap(app: InstalledTvApp, removeAdaptiveBackground: Boolean
     return output
 }
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
+private data class AmberPalette(val surface: Color, val focus: Color, val accent: Color, val border: Color)
+private val LocalAmberPalette = androidx.compose.runtime.staticCompositionLocalOf { AmberPalette(Color(0xB31A242B), Color(0xB34C6578), Color(0xFF78B7FF), Color(0x55FFFFFF)) }
 
 private fun loadInstalledTvApps(pm: PackageManager): List<InstalledTvApp> {
     val resolved = listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER).flatMap { category ->
@@ -353,6 +355,7 @@ private fun AmberHome() {
     }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
+    CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f))) {
     Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -478,6 +481,7 @@ private fun AmberHome() {
         if (showAddDockDialog) AddDockDialog(apps, dock, iconMode, removeIconBackground, font,
             onApply = { selected -> saveDock(selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
         if (splashVisible) AmberBootSplash()
+    }
     }
 }
 
