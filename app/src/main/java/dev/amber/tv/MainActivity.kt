@@ -341,10 +341,21 @@ private fun AmberHome() {
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
-                            AsyncImage(wallpaper.url, null, Modifier.fillMaxSize().blur(8.dp).clip(dockShape), contentScale = ContentScale.Crop)
-                        }
-                        Box(Modifier.fillMaxSize().clip(dockShape).background(Brush.verticalGradient(listOf(Color(0x680A1118), Color(0x780A1118), Color(0x680A1118)))).border(1.dp, Color(0x45FFFFFF), dockShape))
+                        // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
+                        Box(
+                            Modifier.fillMaxSize()
+                                .clip(dockShape)
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0x28FFFFFF),
+                                            Color(0x1CFFFFFF),
+                                            Color(0x30101820)
+                                        )
+                                    )
+                                )
+                                .border(1.dp, Color(0x55FFFFFF), dockShape)
+                        )
                         LazyRow(
                             state = dockListState,
                             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)
