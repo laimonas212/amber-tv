@@ -90,6 +90,32 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 private const val PREFS = "amber_tv_prefs"
+private const val PROFILE_META_PREFS = "amber_tv_profiles"
+private data class LocalProfile(val id: String, val name: String)
+private fun saveProfiles(context: Context, profiles: List<LocalProfile>, activeId: String) {
+    val array = org.json.JSONArray()
+    profiles.forEach { array.put(JSONObject().put("id", it.id).put("name", it.name)) }
+    context.getSharedPreferences(PROFILE_META_PREFS, 0).edit().putString("profiles", array.toString()).putString("active_profile", activeId).apply()
+}
+private fun readProfiles(context: Context): List<LocalProfile> {
+    val meta = context.getSharedPreferences(PROFILE_META_PREFS, 0)
+    meta.getString("profiles", null)?.let { raw ->
+        runCatching { val a=org.json.JSONArray(raw); (0 until a.length()).map { i -> val o=a.getJSONObject(i); LocalProfile(o.getString("id"),o.getString("name")) } }.getOrNull()?.let { if(it.isNotEmpty()) return it }
+    }
+    val id="profile_1"
+    val legacy=context.getSharedPreferences(PREFS,0)
+    val target=context.getSharedPreferences("amber_tv_$id",0)
+    if(target.all.isEmpty() && legacy.all.isNotEmpty()) {
+        val e=target.edit()
+        legacy.all.forEach { (k,v) -> when(v) {
+            is String -> e.putString(k,v); is Boolean -> e.putBoolean(k,v); is Int -> e.putInt(k,v)
+            is Long -> e.putLong(k,v); is Float -> e.putFloat(k,v)
+            is Set<*> -> e.putStringSet(k,v.filterIsInstance<String>().toSet())
+        } }
+        e.apply()
+    }
+    val initial=listOf(LocalProfile(id,"Laimonas")); saveProfiles(context,initial,id); return initial
+}
 private const val KEY_DOCK = "dock_packages"
 private const val KEY_MONO = "monochrome_icons"
 private const val KEY_ICON_MODE = "icon_display_mode"
@@ -296,15 +322,21 @@ private fun WeatherChip(info: WeatherInfo) {
 @Composable
 private fun AmberHome() {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(PREFS, 0) }
+    val activity = context as? ComponentActivity
+    val meta = remember { context.getSharedPreferences(PROFILE_META_PREFS, 0) }
+    var profiles by remember { mutableStateOf(readProfiles(context)) }
+    var activeProfileId by remember { mutableStateOf(meta.getString("active_profile", profiles.first().id) ?: profiles.first().id) }
+    var showProfiles by remember { mutableStateOf(false) }
+    val activeProfile = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.first()
+    val prefs = remember(activeProfileId) { context.getSharedPreferences("amber_tv_$activeProfileId", 0) }
     var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 1)) }
-    var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 5)) }
-    var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 4)) }
+    var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 10)) }
+    var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 9)) }
     val iconPacks = remember(context) { installedIconPacks(context.packageManager) }
     var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, BUILTIN_ICON_PACK).orEmpty().ifBlank { BUILTIN_ICON_PACK }) }
     val iconPackLabel = if (iconPackPackage == BUILTIN_ICON_PACK) "Amber Minimal" else iconPacks.firstOrNull { it.first == iconPackPackage }?.second ?: "Amber Minimal"
-    val accentColors = listOf(Color(0xFF78B7FF), Color(0xFFB69CFF), Color(0xFF72D6C1), Color(0xFFFFB86B), Color(0xFFFF82A8), Color(0xFFD0D5DA))
-    val surfaceColors = listOf(Color(0xFF17232C), Color(0xFF101820), Color(0xFF25212F), Color(0xFF202A24), Color(0xFF282828))
+    val accentColors = listOf(Color(0xFF78B7FF),Color(0xFFB69CFF),Color(0xFF72D6C1),Color(0xFFFFB86B),Color(0xFFFF82A8),Color(0xFFD0D5DA),Color(0xFFFFA6C9),Color(0xFFFFD166),Color(0xFFFF9B85),Color(0xFFC5A3FF),Color(0xFFA8D98B))
+    val surfaceColors = listOf(Color(0xFF17232C),Color(0xFF101820),Color(0xFF25212F),Color(0xFF202A24),Color(0xFF282828),Color(0xFF352432),Color(0xFF382F1D),Color(0xFF3A2925),Color(0xFF29233A),Color(0xFF263329))
     val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
     val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
     val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
@@ -416,6 +448,7 @@ private fun AmberHome() {
                         }
                     }
                     Row(Modifier.padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        ProfileHeaderButton(activeProfile.name) { showProfiles = true }
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -430,13 +463,13 @@ private fun AmberHome() {
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            Color(0x32FFFFFF),
-                                            LocalAmberPalette.current.surface.copy(alpha = .55f),
-                                            LocalAmberPalette.current.surface.copy(alpha = .78f)
+                                            LocalAmberPalette.current.accent.copy(alpha = .13f),
+                                            LocalAmberPalette.current.surface.copy(alpha = .62f),
+                                            LocalAmberPalette.current.surface.copy(alpha = .84f)
                                         )
                                     )
                                 )
-                                .border(1.dp, Color(0x55FFFFFF), dockShape)
+                                .border(1.dp, LocalAmberPalette.current.accent.copy(alpha = .30f), dockShape)
                         )
                         LazyRow(
                             state = dockListState,
@@ -496,8 +529,8 @@ private fun AmberHome() {
                     prefs.edit().putString(KEY_ICON_PACK, iconPackPackage).apply()
                 },
                 onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
-                onAccent = { accentChoice = (accentChoice + 1) % 6; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
-                onSurface = { surfaceChoice = (surfaceChoice + 1) % 5; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
+                onAccent = { accentChoice = (accentChoice + 1) % 11; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
+                onSurface = { surfaceChoice = (surfaceChoice + 1) % 10; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
                 onShowAppNames = { showAppNames = it; prefs.edit().putBoolean(KEY_SHOW_APP_NAMES, it).apply() },
@@ -527,6 +560,11 @@ private fun AmberHome() {
                 onMove = { movingDockPackage = selectedApp.packageName; dockActionPackage = null },
                 onRemove = { saveDock(dock - selectedApp.packageName); dockActionPackage = null })
         }
+        if (showProfiles) ProfilePickerDialog(profiles, activeProfileId,
+            onSelect = { p -> activeProfileId=p.id; saveProfiles(context,profiles,p.id); showProfiles=false; activity?.recreate() },
+            onAdd = { val id="profile_${System.currentTimeMillis()}"; val name=if(profiles.none { it.name=="Dukra" }) "Dukra" else "Profilis ${profiles.size+1}"; profiles=profiles+LocalProfile(id,name); saveProfiles(context,profiles,activeProfileId) },
+            onDelete = { p -> if(profiles.size>1 && p.id!=activeProfileId) { profiles=profiles.filterNot { it.id==p.id }; context.getSharedPreferences("amber_tv_${p.id}",0).edit().clear().apply(); saveProfiles(context,profiles,activeProfileId) } },
+            onClose = { showProfiles=false })
         if (showAddDockDialog) AddDockDialog(apps, dock, iconMode, removeIconBackground, font,
             onApply = { selected -> saveDock(selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
         if (splashVisible) AmberBootSplash()
@@ -565,6 +603,58 @@ private fun AmberBootSplash() {
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ProfileHeaderButton(name:String,onClick:()->Unit) {
+    TvSurface(onClick,Modifier.height(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(24.dp)),
+        colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x18FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus),
+        scale=ClickableSurfaceDefaults.scale(focusedScale=1.05f)) {
+        Row(Modifier.padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text("●",color=LocalAmberPalette.current.accent,fontSize=17.sp)
+            Text(name,color=Color.White,fontSize=14.sp,fontWeight=FontWeight.Medium)
+        }
+    }
+}
+@Composable
+private fun ProfilePickerDialog(profiles:List<LocalProfile>,activeId:String,onSelect:(LocalProfile)->Unit,onAdd:()->Unit,onDelete:(LocalProfile)->Unit,onClose:()->Unit) {
+    Dialog(onDismissRequest=onClose) {
+        Column(Modifier.width(560.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xF21A242C))
+            .border(1.dp,Color(0x55FFFFFF),RoundedCornerShape(28.dp)).padding(24.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Text("Who's watching?",color=Color.White,fontSize=25.sp,fontWeight=FontWeight.SemiBold)
+            Text("Each profile keeps its own wallpaper, colours and Dock",color=Color.White.copy(alpha=.62f),fontSize=14.sp)
+            profiles.forEach { p ->
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        TvSurface(onClick={onSelect(p)},modifier=Modifier.fillMaxWidth().height(64.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+                            colors=ClickableSurfaceDefaults.colors(containerColor=if(p.id==activeId) Color(0x553D7890) else Color(0x22FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) {
+                            Row(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalAlignment=Alignment.CenterVertically) {
+                                Text("●",color=LocalAmberPalette.current.accent,fontSize=20.sp)
+                                Text(p.name,Modifier.padding(start=14.dp),color=Color.White,fontSize=18.sp)
+                                Spacer(Modifier.weight(1f))
+                                if(p.id==activeId) Text("ACTIVE",color=LocalAmberPalette.current.accent,fontSize=11.sp)
+                            }
+                        }
+                    }
+                    if(profiles.size>1 && p.id!=activeId) TvSurface(onClick={onDelete(p)},modifier=Modifier.size(48.dp),
+                        shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x22FFFFFF),focusedContainerColor=Color(0x66B94B55))) {
+                        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("−",color=Color.White,fontSize=23.sp) }
+                    }
+                }
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                TvSurface(onClick=onAdd,modifier=Modifier.weight(1f).height(54.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                    colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x223FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) {
+                    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("+  Add profile",color=Color.White,fontSize=16.sp) }
+                }
+                TvSurface(onClick=onClose,modifier=Modifier.width(120.dp).height(54.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                    colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x223FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus)) {
+                    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Text("Close",color=Color.White,fontSize=16.sp) }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     TvSurface(onClick, Modifier.size(48.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
@@ -674,8 +764,8 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
             item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
-            item { SettingsTile("Accent colour", listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose", "Neutral")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
-            item { SettingsTile("Glass tint", listOf("Deep blue", "Midnight", "Plum", "Forest", "Graphite")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
+            item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
+            item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
         }
     }
