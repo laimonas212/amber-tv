@@ -293,12 +293,12 @@ private fun AmberHome() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, 0) }
     var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0).coerceIn(0, 1)) }
-    var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 4)) }
+    var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 5)) }
     var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 4)) }
     val iconPacks = remember(context) { installedIconPacks(context.packageManager) }
     var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, "").orEmpty()) }
     val iconPackLabel = iconPacks.firstOrNull { it.first == iconPackPackage }?.second ?: "System icons"
-    val accentColors = listOf(Color(0xFF78B7FF), Color(0xFFB69CFF), Color(0xFF72D6C1), Color(0xFFFFB86B), Color(0xFFFF82A8))
+    val accentColors = listOf(Color(0xFF78B7FF), Color(0xFFB69CFF), Color(0xFF72D6C1), Color(0xFFFFB86B), Color(0xFFFF82A8), Color(0xFFD0D5DA))
     val surfaceColors = listOf(Color(0xFF17232C), Color(0xFF101820), Color(0xFF25212F), Color(0xFF202A24), Color(0xFF282828))
     val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
     val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
@@ -403,16 +403,14 @@ private fun AmberHome() {
         when (screen) {
             Screen.HOME -> {
                 Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x880A1118)).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
                         if (showWeather) {
                             if (weather != null) WeatherChip(weather!!)
                             else Text("Weather unavailable · retrying", color = Color.White.copy(alpha = .65f), fontSize = 13.sp)
                         }
                     }
-                    }
-                    Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0x880A1118)).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
                         HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                     }
@@ -491,7 +489,7 @@ private fun AmberHome() {
                     iconPacks.getOrNull(current + 1)?.first.orEmpty()
                 }; prefs.edit().putString(KEY_ICON_PACK, iconPackPackage).apply() },
                 onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
-                onAccent = { accentChoice = (accentChoice + 1) % 5; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
+                onAccent = { accentChoice = (accentChoice + 1) % 6; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
                 onSurface = { surfaceChoice = (surfaceChoice + 1) % 5; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
@@ -500,7 +498,6 @@ private fun AmberHome() {
                 onWallpaper = { screen = Screen.WALLPAPERS },
                 showWeather = showWeather,
                 onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
-                onManage = { screen = Screen.MANAGE_DOCK }, onAllApps = { screen = Screen.ALL_APPS },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onBack = { screen = Screen.HOME })
             Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
@@ -657,7 +654,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, iconPackLabel: String, hasIconPacks: Boolean, onIconPack: () -> Unit, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, iconPackLabel: String, hasIconPacks: Boolean, onIconPack: () -> Unit, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
@@ -670,10 +667,8 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
             item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
-            item { SettingsTile("Accent colour", listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
+            item { SettingsTile("Accent colour", listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose", "Neutral")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
             item { SettingsTile("Glass tint", listOf("Deep blue", "Midnight", "Plum", "Forest", "Graphite")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
-            item { SettingsTile("Customize Dock", "Add, remove and rearrange", "Choose your favorite apps", "▤", onManage) }
-            item { SettingsTile("App Library", "Browse installed apps", "Open all applications", "▦", onAllApps) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
         }
     }
