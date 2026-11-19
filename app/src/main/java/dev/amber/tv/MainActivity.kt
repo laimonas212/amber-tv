@@ -104,15 +104,37 @@ private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpape
 
 private val defaultWallpapers = emptyList<WallpaperItem>()
 
+private fun resolveWallpaperAsset(rawPath: String, folder: String): String? {
+    val value = rawPath.trim()
+    if (value.isBlank()) return null
+    return runCatching {
+        if (value.startsWith("https://", ignoreCase = true) || value.startsWith("http://", ignoreCase = true)) {
+            URL(value).toString()
+        } else {
+            val fileName = value.substringAfterLast("/")
+            val path = when {
+                value.startsWith("/amber-tv/") -> value
+                value.startsWith("amber-tv/") -> "/$value"
+                value.startsWith("/wallpapers/images/") -> "/amber-tv/wallpapers/$fileName"
+                value.startsWith("/wallpapers/thumbnails/") -> "/amber-tv/thumbnails/$fileName"
+                value.startsWith("/wallpapers/") -> "/amber-tv/wallpapers/$fileName"
+                value.startsWith("/thumbnails/") -> "/amber-tv/thumbnails/$fileName"
+                value.startsWith("wallpapers/") || value.startsWith("thumbnails/") -> "/amber-tv/$value"
+                value.startsWith("/") -> value
+                else -> "/amber-tv/$folder/$value"
+            }
+            URL("https://amberweb.lt$path").toString()
+        }
+    }.getOrNull()
+}
+
 private fun parseWallpaperCatalog(raw: String): List<WallpaperItem> {
     val items = JSONObject(raw).getJSONArray("wallpapers")
     return buildList {
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
-            val rawUrl = item.optString("url")
-            val resolvedUrl = runCatching { URL(URL(WALLPAPER_CATALOG_URL), rawUrl).toString() }.getOrNull()
-            val rawThumbnail = item.optString("thumbnail", rawUrl)
-            val resolvedThumbnail = runCatching { URL(URL(WALLPAPER_CATALOG_URL), rawThumbnail).toString() }.getOrNull()
+            val resolvedUrl = resolveWallpaperAsset(item.optString("url"), "wallpapers")
+            val resolvedThumbnail = resolveWallpaperAsset(item.optString("thumbnail", item.optString("url")), "thumbnails")
             if (resolvedUrl?.startsWith("https://") == true) add(WallpaperItem(
                 id = item.optString("id", "remote-$i"),
                 title = item.optString("title", "Wallpaper"),
@@ -247,8 +269,7 @@ private fun AmberHome() {
     val dockListState = rememberLazyListState()
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
     var dockFocusedIndex by remember { mutableIntStateOf(-1) }
-    var dockScrollJob by remember { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
+    var dockScrollJob by remember { mutableStateOf<Job?>(null) }    val scope = rememberCoroutineScope()
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var wakeRefreshTick by remember { mutableIntStateOf(0) }
     // Android TV's POWER button usually suspends the display without killing this process.
@@ -497,8 +518,7 @@ private fun ScreenTitle(title: String, onBack: () -> Unit) {
 @Composable
 private fun WallpaperLibraryScreen(
     wallpapers: List<WallpaperItem>, selectedIndex: Int, dockApps: List<InstalledTvApp>,
-    mono: Boolean, font: FontFamily, onSelect: (Int) -> Unit, onBack: () -> Unit
-) {
+    mono: Boolean, font: FontFamily, onSelect: (Int) -> Unit, onBack: () -> Unit) {
     var category by remember { mutableStateOf("All") }
     var focusedIndex by remember { mutableIntStateOf(selectedIndex) }
     var previewIndex by remember { mutableIntStateOf(selectedIndex) }
@@ -747,8 +767,7 @@ private fun DockGlassAction(symbol: String, title: String, onClick: () -> Unit) 
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(symbol, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Light)
             Text(title, color = Color.White.copy(alpha = .9f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        }
-    }
+        }    }
 }
 
 @Composable
@@ -847,6 +866,7 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
     val keyScope = rememberCoroutineScope()
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var longPressTriggered by remember { mutableStateOf(false) }
+    var suppressNextOkKeyUp by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface({
             // OK is handled entirely in onPreviewKeyEvent to avoid a second click on key release.
@@ -854,19 +874,24 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
             .graphicsLayer { if (isMoving) { scaleX = 1.045f; scaleY = 1.045f } }
             .onPreviewKeyEvent { event ->
                 val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
-                if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                if (isOkKey && event.type == KeyEventType.KeyUp && suppressNextOkKeyUp) {
+                    // Move mode ends on KeyDown; consume its matching KeyUp so it cannot launch the app.
+                    suppressNextOkKeyUp = false
+                    true
+                } else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                     onMove(-1); true
                 } else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
                     onMove(1); true
                 } else if (isMoving && event.type == KeyEventType.KeyDown && isOkKey) {
-                    onClick(); true
+                    suppressNextOkKeyUp = true
+                    onClick()
+                    true
                 } else if (!isMoving && !wiggle && isOkKey && event.type == KeyEventType.KeyDown) {
                     if (longPressJob == null && !longPressTriggered) {
                         longPressJob = keyScope.launch {
                             delay(650)
                             longPressTriggered = true
                             longPressJob = null
-                            onLongPress()
                         }
                     }
                     true
@@ -874,9 +899,10 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
                     longPressJob?.cancel()
                     longPressJob = null
                     if (longPressTriggered) {
-                        // The action bubble was already opened when the long-press threshold was reached.
-                        // Releasing OK must not dismiss it or trigger another action.
+                        // Open the action bubble only after the hold is released, so this OK KeyUp
+                        // cannot activate the first focused action inside the newly opened dialog.
                         longPressTriggered = false
+                        onLongPress()
                     } else {
                         onClick()
                     }
