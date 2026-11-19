@@ -277,11 +277,14 @@ private fun AmberHome() {
             if (remote.isNotEmpty()) {
                 wallpaperItems = remote
                 wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(remote.indices)
-                prefs.edit().putString(KEY_WALLPAPER_CACHE, URL(WALLPAPER_CATALOG_URL).openConnection().apply {
-                    connectTimeout = 10000; readTimeout = 12000; useCaches = false
-                }.getInputStream().bufferedReader().use { it.readText() }).apply()
+                prefs.edit().putString(KEY_WALLPAPER_CACHE, JSONObject().put("wallpapers", org.json.JSONArray().apply {
+                    remote.forEach { item ->
+                        put(JSONObject().put("id", item.id).put("title", item.title).put("category", item.category)
+                            .put("url", item.url).put("thumbnail", item.thumbnail).put("credit", item.credit))
+                    }
+                }).toString()).apply()
             }
-            delay(if (remote.isEmpty()) 2 * 60 * 1000L else 6 * 60 * 60 * 1000L)
+            delay(if (remote.isEmpty()) 2 * 60 * 1000L else 15 * 60 * 1000L)
         }
     }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
@@ -298,7 +301,10 @@ private fun AmberHome() {
                 Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 34.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
-                        if (showWeather && weather != null) WeatherChip(weather!!)
+                        if (showWeather) {
+                            if (weather != null) WeatherChip(weather!!)
+                            else Text("Weather unavailable · retrying", color = Color.White.copy(alpha = .65f), fontSize = 13.sp)
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
