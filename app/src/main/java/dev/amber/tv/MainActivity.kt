@@ -720,10 +720,10 @@ private fun DockGlassAction(symbol: String, title: String, onClick: () -> Unit) 
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(
         onClick,
-        Modifier.weight(1f).height(68.dp),
+        Modifier.width(96.dp).height(68.dp),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(19.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0x332FFFFFF),
+            containerColor = Color(0x33FFFFFF),
             focusedContainerColor = Color(0x55FFFFFF)
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)
@@ -781,7 +781,7 @@ private fun AddDockDialog(
                             modifier = Modifier.height(112.dp),
                             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
                             colors = ClickableSurfaceDefaults.colors(
-                                containerColor = if (isSelected) Color(0x443FFFFFF) else Color(0x221FFFFFF),
+                                containerColor = if (isSelected) Color(0x44FFFFFF) else Color(0x22FFFFFF),
                                 focusedContainerColor = Color(0x66FFFFFF)
                             )
                         ) {
