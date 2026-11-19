@@ -424,8 +424,8 @@ private fun AmberHome() {
                 onMove = { movingDockPackage = selectedApp.packageName; dockActionPackage = null },
                 onRemove = { saveDock(dock - selectedApp.packageName); dockActionPackage = null })
         }
-        if (showAddDockDialog) AddDockDialog(apps.filter { it.packageName !in dock }, iconMode, removeIconBackground, font,
-            onAdd = { selected -> saveDock(dock + selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
+        if (showAddDockDialog) AddDockDialog(apps, dock, iconMode, removeIconBackground, font,
+            onApply = { selected -> saveDock(selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
         if (splashVisible) AmberBootSplash()
     }
 }
@@ -700,55 +700,98 @@ private fun AddDockButton(onClick: () -> Unit) {
 @Composable
 private fun DockActionDialog(app: InstalledTvApp, onDismiss: () -> Unit, onMove: () -> Unit, onRemove: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.width(360.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xF21B2832)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(22.dp)).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(app.label, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Text("What would you like to do?", color = Color.White.copy(alpha = .65f), fontSize = 14.sp)
-            DialogAction("Move", "Reposition this app in the dock", onMove)
-            DialogAction("Remove", "Take this app out of the dock", onRemove)
-            DialogAction("Cancel", "Keep it where it is", onDismiss)
+        Row(
+            Modifier.width(330.dp).clip(RoundedCornerShape(28.dp))
+                .background(Color(0xD91A1C20))
+                .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(28.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DockGlassAction("↔", "Move", onMove)
+            DockGlassAction("−", "Remove", onRemove)
+            DockGlassAction("×", "Cancel", onDismiss)
         }
     }
 }
 
 @Composable
-private fun DialogAction(title: String, subtitle: String, onClick: () -> Unit) {
+private fun DockGlassAction(symbol: String, title: String, onClick: () -> Unit) {
     @OptIn(ExperimentalTvMaterial3Api::class)
-    TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x552F414D), focusedContainerColor = Color(0xCC9A632F))) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column { Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold); Text(subtitle, color = Color.White.copy(alpha = .6f), fontSize = 11.sp) }
+    TvSurface(
+        onClick,
+        Modifier.weight(1f).height(68.dp),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(19.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color(0x332FFFFFF),
+            focusedContainerColor = Color(0x55FFFFFF)
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)
+    ) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text(symbol, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Light)
+            Text(title, color = Color.White.copy(alpha = .9f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
 
 @Composable
-private fun AddDockDialog(apps: List<InstalledTvApp>, iconMode: Int, removeIconBackground: Boolean, font: FontFamily,
-    onAdd: (List<InstalledTvApp>) -> Unit, onClose: () -> Unit) {
-    var selected by remember { mutableStateOf(emptySet<String>()) }
+private fun AddDockDialog(
+    apps: List<InstalledTvApp>,
+    dockPackages: List<String>,
+    iconMode: Int,
+    removeIconBackground: Boolean,
+    font: FontFamily,
+    onApply: (List<InstalledTvApp>) -> Unit,
+    onClose: () -> Unit
+) {
+    var selected by remember { mutableStateOf(dockPackages.toSet()) }
     Dialog(onDismissRequest = onClose) {
-        Column(Modifier.fillMaxWidth(.88f).fillMaxHeight(.82f).clip(RoundedCornerShape(24.dp)).background(Color(0xF21B2832)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(24.dp)).padding(22.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Add apps to Dock", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (selected.isEmpty()) "Choose the apps you want to pin" else "${selected.size} selected", color = Color.White.copy(alpha = .62f), fontSize = 13.sp)
+        Column(
+            Modifier.width(760.dp).height(500.dp).clip(RoundedCornerShape(30.dp))
+                .background(Color(0xE51A1C20))
+                .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(30.dp))
+                .padding(24.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Dock apps", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Medium)
+                    Text("${selected.size} selected", color = Color.White.copy(alpha = .58f), fontSize = 13.sp)
                 }
-                DialogAction("Close · Add", "Add selected apps and close", { onAdd(apps.filter { it.packageName in selected }); onClose() })
+                DockGlassAction("✓", "Done", { onApply(apps.filter { it.packageName in selected }); onClose() })
             }
-            Spacer(Modifier.height(14.dp))
-            LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                gridItems(apps, key = { it.packageName }) { app ->
-                    val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 120).asImageBitmap() }
-                    @OptIn(ExperimentalTvMaterial3Api::class)
-                    TvSurface(onClick = { selected = if (app.packageName in selected) selected - app.packageName else selected + app.packageName },
-                        modifier = Modifier.height(112.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-                        colors = ClickableSurfaceDefaults.colors(containerColor = if (app.packageName in selected) Color(0xAA9A632F) else Color(0x66334450), focusedContainerColor = Color(0xCC526779))) {
-                        Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Image(bitmap, app.label, Modifier.size(48.dp).clip(RoundedCornerShape(if (removeIconBackground) 12.dp else 4.dp)), contentScale = ContentScale.Fit,
-                                colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
-                            Spacer(Modifier.height(6.dp))
-                            Text(app.label, color = Color.White, fontSize = 11.sp, fontFamily = font, maxLines = 1)
-                            if (app.packageName in selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(18.dp))
+            if (apps.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No apps available", color = Color.White.copy(alpha = .65f), fontSize = 17.sp)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(5),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    gridItems(apps, key = { it.packageName }) { app ->
+                        val isSelected = app.packageName in selected
+                        val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 120).asImageBitmap() }
+                        @OptIn(ExperimentalTvMaterial3Api::class)
+                        TvSurface(
+                            onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
+                            modifier = Modifier.height(112.dp),
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
+                            colors = ClickableSurfaceDefaults.colors(
+                                containerColor = if (isSelected) Color(0x443FFFFFF) else Color(0x221FFFFFF),
+                                focusedContainerColor = Color(0x66FFFFFF)
+                            )
+                        ) {
+                            Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                Image(bitmap, app.label, Modifier.size(48.dp), contentScale = ContentScale.Fit,
+                                    colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+                                Spacer(Modifier.height(7.dp))
+                                Text(app.label, color = Color.White, fontSize = 12.sp, fontFamily = font, maxLines = 1)
+                                if (isSelected) Text("✓", color = Color.White, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -809,8 +852,9 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
             }
         }
         if (isMoving) {
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).background(Color(0xDDC27A32), RoundedCornerShape(20.dp)).padding(horizontal = 9.dp, vertical = 3.dp)) {
-                Text("MOVE  ◀   ▶", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth().align(Alignment.Center), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("‹", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Light)
+                Text("›", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Light)
             }
         }
         if (wiggle) {
