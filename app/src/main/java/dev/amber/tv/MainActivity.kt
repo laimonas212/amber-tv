@@ -603,7 +603,6 @@ private fun AmberBootSplash() {
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun ProfileHeaderButton(name:String,onClick:()->Unit) {
     TvSurface(onClick,Modifier.height(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(24.dp)),
