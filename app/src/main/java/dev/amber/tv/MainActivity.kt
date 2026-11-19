@@ -778,19 +778,38 @@ private fun AddDockDialog(
                         @OptIn(ExperimentalTvMaterial3Api::class)
                         TvSurface(
                             onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
-                            modifier = Modifier.height(112.dp),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(18.dp)),
+                            modifier = Modifier.height(116.dp),
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
                             colors = ClickableSurfaceDefaults.colors(
-                                containerColor = if (isSelected) Color(0x44FFFFFF) else Color(0x22FFFFFF),
-                                focusedContainerColor = Color(0x66FFFFFF)
-                            )
+                                containerColor = Color.Transparent,
+                                focusedContainerColor = Color(0x20FFFFFF)
+                            ),
+                            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.035f)
                         ) {
-                            Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Image(bitmap, app.label, Modifier.size(48.dp), contentScale = ContentScale.Fit,
-                                    colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
-                                Spacer(Modifier.height(7.dp))
-                                Text(app.label, color = Color.White, fontSize = 12.sp, fontFamily = font, maxLines = 1)
-                                if (isSelected) Text("✓", color = Color.White, fontSize = 12.sp)
+                            Box(Modifier.fillMaxSize().padding(7.dp)) {
+                                Image(
+                                    bitmap, app.label,
+                                    Modifier.align(Alignment.Center).padding(bottom = 17.dp).size(62.dp),
+                                    contentScale = ContentScale.Fit,
+                                    colorFilter = if (iconMode == 1) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
+                                )
+                                Text(
+                                    app.label,
+                                    Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                                    color = Color.White.copy(alpha = .88f),
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.SansSerif,
+                                    maxLines = 1
+                                )
+                                Box(
+                                    Modifier.align(Alignment.TopEnd).size(19.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(if (isSelected) Color.White else Color(0x33000000))
+                                        .then(if (isSelected) Modifier else Modifier.border(1.dp, Color(0x99FFFFFF), RoundedCornerShape(50))),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) Text("✓", color = Color(0xFF202329), fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
+                                }
                             }
                         }
                     }
@@ -810,9 +829,9 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
     var longPressTriggered by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface({
-            if (longPressTriggered) longPressTriggered = false else onClick()
+            // OK is handled entirely in onPreviewKeyEvent to avoid a second click on key release.
         }, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
-            .graphicsLayer { if (isMoving) { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } }
+            .graphicsLayer { if (isMoving) { scaleX = 1.045f; scaleY = 1.045f } }
             .onPreviewKeyEvent { event ->
                 val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                 if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
@@ -827,20 +846,26 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
                             delay(650)
                             longPressTriggered = true
                             longPressJob = null
-                            onLongPress()
                         }
                     }
-                    false
-                } else if (!isMoving && isOkKey && event.type == KeyEventType.KeyUp) {
-                    val consumed = longPressTriggered
+                    true
+                } else if (!isMoving && !wiggle && isOkKey && event.type == KeyEventType.KeyUp) {
                     longPressJob?.cancel()
                     longPressJob = null
-                    longPressTriggered = false
-                    consumed
+                    if (longPressTriggered) {
+                        longPressTriggered = false
+                        onLongPress()
+                    } else {
+                        onClick()
+                    }
+                    true
                 } else false
             },
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
+            colors = ClickableSurfaceDefaults.colors(
+                containerColor = Color.Transparent,
+                focusedContainerColor = if (isMoving) Color.Transparent else Color(0x32FFFFFF)
+            ),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = if (showAppNames) 10.dp else 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Image(bitmap, app.label, Modifier.size(if (showAppNames) 58.dp else 88.dp).clip(RoundedCornerShape(if (removeIconBackground) 18.dp else if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
