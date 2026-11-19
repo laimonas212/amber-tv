@@ -102,6 +102,7 @@ private const val KEY_THEME_MODE = "theme_mode"
 private const val KEY_ACCENT = "theme_accent"
 private const val KEY_SURFACE = "theme_surface"
 private const val KEY_ICON_PACK = "icon_pack_package"
+private const val BUILTIN_ICON_PACK = "__amber_minimal__"
 private const val KEY_WALLPAPER_CACHE = "remote_wallpaper_catalog"
 private data class WallpaperItem(val id: String, val title: String, val category: String, val url: String, val thumbnail: String = url.replace("w=2400", "w=1200"), val credit: String = "Unsplash")
 
@@ -210,15 +211,19 @@ private fun packedAppIcon(context: Context, app: InstalledTvApp, packPackage: St
 }.getOrNull()
 
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
-    val iconPack = context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, "").orEmpty()
-    val drawable = if (iconPack.isNotBlank()) packedAppIcon(context, app, iconPack) ?: app.icon else app.icon
-    val iconDrawable = if (removeAdaptiveBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
+    val iconPack = context.getSharedPreferences(PREFS, 0).getString(KEY_ICON_PACK, BUILTIN_ICON_PACK).orEmpty()
+    val useAmberMinimal = iconPack.isBlank() || iconPack == BUILTIN_ICON_PACK
+    val drawable = if (useAmberMinimal) app.icon else packedAppIcon(context, app, iconPack) ?: app.icon
+    // Amber Minimal uses the app's original adaptive foreground: real logo, transparent background.
+    // Legacy non-adaptive icons fall back to the original app icon because their background is baked in.
+    val stripBackground = useAmberMinimal || removeAdaptiveBackground
+    val iconDrawable = if (stripBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
     val sourceSize = size * 2
     val source = Bitmap.createBitmap(sourceSize, sourceSize, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(source)
     iconDrawable.setBounds(0, 0, sourceSize, sourceSize)
     iconDrawable.draw(canvas)
-    if (!removeAdaptiveBackground) return Bitmap.createScaledBitmap(source, size, size, true)
+    if (!stripBackground) return Bitmap.createScaledBitmap(source, size, size, true)
 
     // Trim transparent padding, then fit every foreground into the same visual box.
     val pixels = IntArray(sourceSize * sourceSize)
@@ -296,8 +301,8 @@ private fun AmberHome() {
     var accentChoice by remember { mutableIntStateOf(prefs.getInt(KEY_ACCENT, 0).coerceIn(0, 5)) }
     var surfaceChoice by remember { mutableIntStateOf(prefs.getInt(KEY_SURFACE, 0).coerceIn(0, 4)) }
     val iconPacks = remember(context) { installedIconPacks(context.packageManager) }
-    var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, "").orEmpty()) }
-    val iconPackLabel = iconPacks.firstOrNull { it.first == iconPackPackage }?.second ?: "System icons"
+    var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, BUILTIN_ICON_PACK).orEmpty().ifBlank { BUILTIN_ICON_PACK }) }
+    val iconPackLabel = if (iconPackPackage == BUILTIN_ICON_PACK) "Amber Minimal" else iconPacks.firstOrNull { it.first == iconPackPackage }?.second ?: "Amber Minimal"
     val accentColors = listOf(Color(0xFF78B7FF), Color(0xFFB69CFF), Color(0xFF72D6C1), Color(0xFFFFB86B), Color(0xFFFF82A8), Color(0xFFD0D5DA))
     val surfaceColors = listOf(Color(0xFF17232C), Color(0xFF101820), Color(0xFF25212F), Color(0xFF202A24), Color(0xFF282828))
     val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
@@ -483,11 +488,13 @@ private fun AmberHome() {
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 themeMode = themeMode, accentChoice = accentChoice, surfaceChoice = surfaceChoice,
-                iconPackLabel = iconPackLabel, hasIconPacks = iconPacks.isNotEmpty(),
-                onIconPack = { iconPackPackage = if (iconPackPackage.isBlank()) iconPacks.firstOrNull()?.first.orEmpty() else {
-                    val current = iconPacks.indexOfFirst { it.first == iconPackPackage }
-                    iconPacks.getOrNull(current + 1)?.first.orEmpty()
-                }; prefs.edit().putString(KEY_ICON_PACK, iconPackPackage).apply() },
+                iconPackLabel = iconPackLabel, hasIconPacks = true,
+                onIconPack = {
+                    val availablePacks = listOf(BUILTIN_ICON_PACK) + iconPacks.map { it.first }
+                    val current = availablePacks.indexOf(iconPackPackage).coerceAtLeast(0)
+                    iconPackPackage = availablePacks[(current + 1) % availablePacks.size]
+                    prefs.edit().putString(KEY_ICON_PACK, iconPackPackage).apply()
+                },
                 onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
                 onAccent = { accentChoice = (accentChoice + 1) % 6; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
                 onSurface = { surfaceChoice = (surfaceChoice + 1) % 5; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
@@ -660,7 +667,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈", onIconMode) }
-            item { SettingsTile("Icon pack", iconPackLabel, if (hasIconPacks) "Cycle installed ADW / Nova icon packs" else "No compatible packs found", "▣", onIconPack) }
+            item { SettingsTile("Icon pack", iconPackLabel, "Original logos · transparent adaptive icons", "▣", onIconPack) }
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
