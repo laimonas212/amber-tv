@@ -515,7 +515,7 @@ private fun AmberBootSplash() {
 @Composable
 private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     TvSurface(onClick, Modifier.size(48.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x35FFFFFF)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x18FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(25.dp)) }
     }
@@ -540,7 +540,7 @@ private fun WallpaperLibraryScreen(
     LaunchedEffect(selectedIndex) { focusedIndex = selectedIndex; previewIndex = selectedIndex }
     val categories = listOf("All") + wallpapers.map { it.category }.distinct()
     val filtered = wallpapers.withIndex().filter { category == "All" || it.value.category == category }
-    Row(Modifier.fillMaxSize().background(Color(0xE9121B22)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
+    Row(Modifier.fillMaxSize().background(Color(0x99101820)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
         Column(Modifier.weight(0.82f).fillMaxHeight()) {
             ScreenTitle("Background", onBack)
             Text("Choose a look for your Amber TV home screen", color = Color.White.copy(alpha = .62f), fontSize = 14.sp, modifier = Modifier.padding(start = 66.dp, top = 3.dp, bottom = 18.dp))
@@ -548,7 +548,7 @@ private fun WallpaperLibraryScreen(
                 items(categories) { item ->
                     @OptIn(ExperimentalTvMaterial3Api::class)
                     TvSurface(onClick = { category = item }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-                        colors = ClickableSurfaceDefaults.colors(containerColor = if (category == item) Color(0xCCB66B24) else Color(0x66202E3A), focusedContainerColor = Color(0xDDAA692F))) {
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (category == item) LocalAmberPalette.current.focus else LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus)) {
                         Text(item, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp))
                     }
                 }
@@ -560,15 +560,15 @@ private fun WallpaperLibraryScreen(
                     @OptIn(ExperimentalTvMaterial3Api::class)
                     TvSurface(onClick = { focusedIndex = indexed.index; previewIndex = indexed.index; onSelect(indexed.index) }, modifier = Modifier.fillMaxWidth().height(58.dp).onFocusChanged { if (it.isFocused) focusedIndex = indexed.index },
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
-                        colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) Color(0xE6F1F4F4) else Color(0x77202B32), focusedContainerColor = if (selected) Color.White else Color(0xAA526779)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (selected) LocalAmberPalette.current.focus else LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
                         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.015f)) {
                         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.size(width = 58.dp, height = 38.dp).clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
                             Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(wallpaper.title, color = if (selected) Color(0xFF17232C) else Color.White, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
-                                Text(wallpaper.category, color = if (selected) Color(0xFF52616A) else Color.White.copy(alpha = .58f), fontSize = 11.sp)
+                                Text(wallpaper.title, color = Color.White, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                                Text(wallpaper.category, color = Color.White.copy(alpha = .58f), fontSize = 11.sp)
                             }
-                            if (selected) Text("✓", color = Color(0xFF17232C), fontSize = 18.sp, modifier = Modifier.padding(end = 4.dp))
+                            if (selected) Text("✓", color = LocalAmberPalette.current.accent, fontSize = 18.sp, modifier = Modifier.padding(end = 4.dp))
                         }
                     }
                 }
@@ -608,7 +608,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onManage: () -> Unit, onAllApps: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
@@ -619,6 +619,9 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
+            item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
+            item { SettingsTile("Accent colour", listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
+            item { SettingsTile("Glass tint", listOf("Deep blue", "Midnight", "Plum", "Forest", "Graphite")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
             item { SettingsTile("Customize Dock", "Add, remove and rearrange", "Choose your favorite apps", "▤", onManage) }
             item { SettingsTile("App Library", "Browse installed apps", "Open all applications", "▦", onAllApps) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
@@ -628,9 +631,10 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
 
 @Composable
 private fun SettingsTile(title: String, value: String, hint: String, glyph: String, onClick: () -> Unit) {
+    val palette = LocalAmberPalette.current
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(142.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x76202E3A), focusedContainerColor = Color(0xB34C6578)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = palette.surface, focusedContainerColor = palette.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.025f)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 15.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Text(glyph, color = Color.White.copy(alpha = .9f), fontSize = 25.sp, fontWeight = FontWeight.Light)
@@ -647,7 +651,7 @@ private fun SettingsTile(title: String, value: String, hint: String, glyph: Stri
 private fun SettingRow(title: String, value: String, hint: String, onClick: () -> Unit) {
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(76.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xB51A242B), focusedContainerColor = Color(0xDD435563)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.015f)) {
         Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold); Text(hint, color = Color(0xFFB7C2C9), fontSize = 12.sp) }
@@ -672,7 +676,7 @@ private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Bo
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x70202D38), focusedContainerColor = Color(0xAA526779)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(if (removeIconBackground) 17.dp else 17.dp)), contentScale = ContentScale.Fit,
