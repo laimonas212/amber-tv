@@ -55,7 +55,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.nativeKeyEvent
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
@@ -763,11 +762,15 @@ private fun AddDockDialog(apps: List<InstalledTvApp>, iconMode: Int, removeIconB
 private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
+    val keyScope = rememberCoroutineScope()
+    var longPressJob by remember { mutableStateOf<Job?>(null) }
+    var longPressTriggered by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
-        TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+        TvSurface({
+            if (longPressTriggered) longPressTriggered = false else onClick()
+        }, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .graphicsLayer { if (isMoving) { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } }
             .onPreviewKeyEvent { event ->
-                val native = event.nativeKeyEvent
                 val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
                 if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
                     onMove(-1); true
@@ -775,9 +778,22 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
                     onMove(1); true
                 } else if (isMoving && event.type == KeyEventType.KeyDown && isOkKey) {
                     onClick(); true
-                } else if (!isMoving && !wiggle && isOkKey &&
-                    native.action == android.view.KeyEvent.ACTION_DOWN && native.repeatCount >= 1) {
-                    onLongPress(); true
+                } else if (!isMoving && !wiggle && isOkKey && event.type == KeyEventType.KeyDown) {
+                    if (longPressJob == null && !longPressTriggered) {
+                        longPressJob = keyScope.launch {
+                            delay(650)
+                            longPressTriggered = true
+                            longPressJob = null
+                            onLongPress()
+                        }
+                    }
+                    false
+                } else if (!isMoving && isOkKey && event.type == KeyEventType.KeyUp) {
+                    val consumed = longPressTriggered
+                    longPressJob?.cancel()
+                    longPressJob = null
+                    longPressTriggered = false
+                    consumed
                 } else false
             },
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
