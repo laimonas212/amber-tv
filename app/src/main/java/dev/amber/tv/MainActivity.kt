@@ -109,13 +109,16 @@ private fun parseWallpaperCatalog(raw: String): List<WallpaperItem> {
     return buildList {
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
-            val url = item.optString("url")
-            if (url.startsWith("https://")) add(WallpaperItem(
+            val rawUrl = item.optString("url")
+            val resolvedUrl = runCatching { URL(URL(WALLPAPER_CATALOG_URL), rawUrl).toString() }.getOrNull()
+            val rawThumbnail = item.optString("thumbnail", rawUrl)
+            val resolvedThumbnail = runCatching { URL(URL(WALLPAPER_CATALOG_URL), rawThumbnail).toString() }.getOrNull()
+            if (resolvedUrl?.startsWith("https://") == true) add(WallpaperItem(
                 id = item.optString("id", "remote-$i"),
                 title = item.optString("title", "Wallpaper"),
                 category = item.optString("category", "Featured"),
-                url = url,
-                thumbnail = item.optString("thumbnail", url).takeIf { it.startsWith("https://") } ?: url,
+                url = resolvedUrl,
+                thumbnail = resolvedThumbnail?.takeIf { it.startsWith("https://") } ?: resolvedUrl,
                 credit = item.optString("credit", "")
             ))
         }
