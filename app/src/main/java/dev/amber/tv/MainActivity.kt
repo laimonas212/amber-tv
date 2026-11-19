@@ -60,6 +60,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.key
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import androidx.compose.ui.input.pointer.pointerInput
@@ -368,7 +370,7 @@ private fun AmberHome() {
                         ) {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
-                                AppDockItem(app, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
+                                AppDockItem(app, index, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
                                     isMoving = movingDockPackage == app.packageName,
                                     onLongPress = { dockActionPackage = app.packageName },
                                     onRemove = { saveDock(dock - app.packageName); dockActionPackage = null },
@@ -832,16 +834,20 @@ private fun AddDockDialog(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused, isMoving, itemIndex) {
+        if (focused) bringIntoViewRequester.bringIntoView()
+    }
     val keyScope = rememberCoroutineScope()
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var longPressTriggered by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface({
             // OK is handled entirely in onPreviewKeyEvent to avoid a second click on key release.
-        }, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+        }, Modifier.fillMaxSize().bringIntoViewRequester(bringIntoViewRequester).onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .graphicsLayer { if (isMoving) { scaleX = 1.045f; scaleY = 1.045f } }
             .onPreviewKeyEvent { event ->
                 val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -857,6 +863,7 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
                             delay(650)
                             longPressTriggered = true
                             longPressJob = null
+                            onLongPress()
                         }
                     }
                     true
@@ -864,8 +871,9 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
                     longPressJob?.cancel()
                     longPressJob = null
                     if (longPressTriggered) {
+                        // The action bubble was already opened when the long-press threshold was reached.
+                        // Releasing OK must not dismiss it or trigger another action.
                         longPressTriggered = false
-                        onLongPress()
                     } else {
                         onClick()
                     }
