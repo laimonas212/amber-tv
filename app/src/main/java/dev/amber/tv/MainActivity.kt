@@ -832,7 +832,7 @@ private fun AddDockDialog(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+@OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
