@@ -122,6 +122,7 @@ private const val KEY_DOCK = "dock_packages"
 private const val KEY_MONO = "monochrome_icons"
 private const val KEY_ICON_MODE = "icon_display_mode"
 private const val KEY_ICON_NO_BG = "icon_no_adaptive_background"
+private const val KEY_ICON_PACK = "icon_pack_package"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
 private const val KEY_WEATHER = "show_weather"
@@ -203,8 +204,45 @@ class MainActivity : ComponentActivity() {
 }
 
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
+private data class InstalledIconPack(val packageName: String, val label: String)
+
+private fun loadInstalledIconPacks(pm: PackageManager): List<InstalledIconPack> {
+    val actions = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME")
+    return actions.flatMap { action ->
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA)
+    }.mapNotNull { info ->
+        val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
+        runCatching {
+            val res = pm.getResourcesForApplication(pkg)
+            res.assets.open("appfilter.xml").close()
+            InstalledIconPack(pkg, info.loadLabel(pm)?.toString() ?: pkg)
+        }.getOrNull()
+    }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+}
+
+private fun currentIconPack(context: Context): String {
+    val active = context.getSharedPreferences(PROFILE_META_PREFS, 0).getString("active_profile", "profile_1") ?: "profile_1"
+    return context.getSharedPreferences("amber_tv_$active", 0).getString(KEY_ICON_PACK, "") ?: ""
+}
+
+private fun themedAppIcon(context: Context, app: InstalledTvApp): Drawable? {
+    val pack = currentIconPack(context).takeIf { it.isNotBlank() } ?: return null
+    return runCatching {
+        val res = context.packageManager.getResourcesForApplication(pack)
+        val xml = res.assets.open("appfilter.xml").bufferedReader().use { it.readText() }
+        val entries = Regex("""<item\s+component="ComponentInfo\{([^}]+)}"\s+drawable="([^"]+)"\s*/>""", RegexOption.DOT_MATCHES_ALL)
+            .findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        val exact = app.packageName + "/" + app.activityName
+        val name = entries.firstOrNull { it.first == exact || it.first == "/" + app.activityName }?.second
+            ?: entries.firstOrNull { it.first.startsWith(app.packageName + "/") }?.second
+            ?: return@runCatching null
+        val id = res.getIdentifier(name, "drawable", pack).takeIf { it != 0 } ?: res.getIdentifier(name, "mipmap", pack)
+        if (id == 0) null else res.getDrawable(id, null)
+    }.getOrNull()
+}
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
-    val drawable = app.icon
+    val drawable = themedAppIcon(context, app) ?: app.icon
     val iconDrawable = if (removeAdaptiveBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
     val sourceSize = size * 2
     val source = Bitmap.createBitmap(sourceSize, sourceSize, Bitmap.Config.ARGB_8888)
@@ -289,6 +327,9 @@ private fun AmberHome() {
     var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
     val mono = iconMode != 0
     var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
+    var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, "") ?: "") }
+    var showIconPackPicker by remember { mutableStateOf(false) }
+    val installedIconPacks = remember(context) { loadInstalledIconPacks(context.packageManager) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
     var wallpaperItems by remember {
         mutableStateOf(runCatching { parseWallpaperCatalog(prefs.getString(KEY_WALLPAPER_CACHE, null).orEmpty()) }.getOrDefault(emptyList()))
@@ -471,6 +512,8 @@ private fun AmberHome() {
                 onSurface = { surfaceChoice = (surfaceChoice + 1) % 10; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
                 onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
+                iconPackName = installedIconPacks.firstOrNull { it.packageName == iconPackPackage }?.label ?: if (iconPackPackage.isBlank()) "Default icons" else "Unavailable",
+                onIconPack = { showIconPackPicker = true },
                 onShowAppNames = { showAppNames = it; prefs.edit().putBoolean(KEY_SHOW_APP_NAMES, it).apply() },
                 onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
                 onWallpaper = { screen = Screen.WALLPAPERS },
@@ -498,6 +541,7 @@ private fun AmberHome() {
                 onMove = { movingDockPackage = selectedApp.packageName; dockActionPackage = null },
                 onRemove = { saveDock(dock - selectedApp.packageName); dockActionPackage = null })
         }
+        if (showIconPackPicker) IconPackPickerDialog(installedIconPacks, iconPackPackage, onSelect = { pack -> iconPackPackage = pack; prefs.edit().putString(KEY_ICON_PACK, pack).apply(); showIconPackPicker = false }, onClose = { showIconPackPicker = false })
         if (showProfiles) ProfilePickerDialog(profiles, activeProfileId,
             onSelect = { p -> activeProfileId=p.id; saveProfiles(context,profiles,p.id); showProfiles=false; activity?.recreate() },
             onAdd = { val id="profile_${System.currentTimeMillis()}"; val name=if(profiles.none { it.name=="Dukra" }) "Dukra" else "Profilis ${profiles.size+1}"; profiles=profiles+LocalProfile(id,name); saveProfiles(context,profiles,activeProfileId) },
@@ -704,13 +748,14 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈", onIconMode) }
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
+            item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
@@ -719,6 +764,39 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
             item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
+        }
+    }
+}
+
+@Composable
+private fun IconPackPickerDialog(packs: List<InstalledIconPack>, selectedPackage: String, onSelect: (String) -> Unit, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.width(560.dp).clip(RoundedCornerShape(28.dp)).background(Color(0xF21A242C))
+            .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(28.dp)).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Icon packs", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+            Text("Installed separately on this device", color = Color.White.copy(alpha = .62f), fontSize = 14.sp)
+            TvSurface(onClick = { onSelect("") }, modifier = Modifier.fillMaxWidth().height(58.dp),
+                shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                colors = ClickableSurfaceDefaults.colors(containerColor = if (selectedPackage.isBlank()) Color(0x553D7890) else Color(0x22FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus)) {
+                Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Default app icons", color = Color.White, fontSize = 17.sp)
+                    Spacer(Modifier.weight(1f))
+                    if (selectedPackage.isBlank()) Text("ACTIVE", color = LocalAmberPalette.current.accent, fontSize = 11.sp)
+                }
+            }
+            if (packs.isEmpty()) Text("No compatible icon packs found. Install an ADW / Blueprint-compatible pack first.", color = Color.White.copy(alpha = .72f), fontSize = 14.sp)
+            packs.forEach { pack ->
+                TvSurface(onClick = { onSelect(pack.packageName) }, modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
+                    colors = ClickableSurfaceDefaults.colors(containerColor = if (selectedPackage == pack.packageName) Color(0x553D7890) else Color(0x22FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus)) {
+                    Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(pack.label, color = Color.White, fontSize = 17.sp)
+                        Spacer(Modifier.weight(1f))
+                        if (selectedPackage == pack.packageName) Text("ACTIVE", color = LocalAmberPalette.current.accent, fontSize = 11.sp)
+                    }
+                }
+            }
         }
     }
 }
@@ -768,7 +846,7 @@ private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: I
 @Composable
 private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, "") { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
@@ -813,7 +891,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
 @Composable
 private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 96).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 96).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
