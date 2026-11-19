@@ -269,7 +269,8 @@ private fun AmberHome() {
     val dockListState = rememberLazyListState()
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
     var dockFocusedIndex by remember { mutableIntStateOf(-1) }
-    var dockScrollJob by remember { mutableStateOf<Job?>(null) }    val scope = rememberCoroutineScope()
+    var dockScrollJob by remember { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
     var weather by remember { mutableStateOf<WeatherInfo?>(null) }
     var wakeRefreshTick by remember { mutableIntStateOf(0) }
     // Android TV's POWER button usually suspends the display without killing this process.
