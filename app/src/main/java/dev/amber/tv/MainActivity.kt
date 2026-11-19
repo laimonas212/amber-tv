@@ -427,9 +427,9 @@ private fun AmberHome() {
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            Color(0x28FFFFFF),
-                                            Color(0x1CFFFFFF),
-                                            Color(0x30101820)
+                                            Color(0x32FFFFFF),
+                                            LocalAmberPalette.current.surface.copy(alpha = .55f),
+                                            LocalAmberPalette.current.surface.copy(alpha = .78f)
                                         )
                                     )
                                 )
@@ -634,7 +634,7 @@ private fun WallpaperLibraryScreen(
                         Text("ALL APPS     ⚙ SETTINGS", color = Color.White.copy(alpha = .9f), fontSize = 9.sp)
                     }
                     Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(.92f).padding(bottom = 18.dp).clip(RoundedCornerShape(17.dp))
-                        .background(Color(0xB51A2934)).border(1.dp, Color(0x50FFFFFF), RoundedCornerShape(17.dp)).padding(horizontal = 8.dp, vertical = 8.dp),
+                        .background(LocalAmberPalette.current.surface).border(1.dp, LocalAmberPalette.current.border, RoundedCornerShape(17.dp)).padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                         val previewApps = dockApps.take(6)
                         if (previewApps.isEmpty()) Text("Your dock is empty", color = Color.White.copy(alpha = .7f), modifier = Modifier.padding(12.dp), fontSize = 11.sp)
@@ -773,7 +773,7 @@ private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground:
     var focused by remember { mutableStateOf(false) }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xAA18232C), focusedContainerColor = Color(0xDD435563))) {
+        colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus)) {
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(bitmap, app.label, Modifier.size(34.dp).clip(RoundedCornerShape(if (removeIconBackground) 8.dp else 0.dp)), colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.width(16.dp)); Text(app.label, color = Color.White, fontSize = 16.sp, fontFamily = font)
@@ -795,7 +795,7 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun AddDockButton(onClick: () -> Unit) {
     TvSurface(onClick, Modifier.size(92.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
-        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x44202E3A), focusedContainerColor = Color(0xAA526779)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("+", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Light)
@@ -808,8 +808,8 @@ private fun DockActionDialog(app: InstalledTvApp, onDismiss: () -> Unit, onMove:
     Dialog(onDismissRequest = onDismiss) {
         Row(
             Modifier.width(330.dp).clip(RoundedCornerShape(28.dp))
-                .background(Color(0xD91A1C20))
-                .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(28.dp))
+                .background(LocalAmberPalette.current.surface)
+                .border(1.dp, LocalAmberPalette.current.border, RoundedCornerShape(28.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -855,8 +855,8 @@ private fun AddDockDialog(
     Dialog(onDismissRequest = onClose) {
         Column(
             Modifier.width(760.dp).height(500.dp).clip(RoundedCornerShape(30.dp))
-                .background(Color(0xE51A1C20))
-                .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(30.dp))
+                .background(LocalAmberPalette.current.surface)
+                .border(1.dp, LocalAmberPalette.current.border, RoundedCornerShape(30.dp))
                 .padding(24.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
