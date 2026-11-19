@@ -254,8 +254,8 @@ private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveB
     return output
 }
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, ALL_APPS, MANAGE_DOCK }
-private data class AmberPalette(val surface: Color, val focus: Color, val accent: Color, val border: Color)
-private val LocalAmberPalette = androidx.compose.runtime.staticCompositionLocalOf { AmberPalette(Color(0xB31A242B), Color(0xB34C6578), Color(0xFF78B7FF), Color(0x55FFFFFF)) }
+private data class AmberPalette(val surface: Color, val focus: Color, val accent: Color, val border: Color, val text: Color, val mutedText: Color)
+private val LocalAmberPalette = androidx.compose.runtime.staticCompositionLocalOf { AmberPalette(Color(0xB31A242B), Color(0xB34C6578), Color(0xFF78B7FF), Color(0x55FFFFFF), Color.White, Color.White.copy(alpha = .58f)) }
 
 private fun loadInstalledTvApps(pm: PackageManager): List<InstalledTvApp> {
     val resolved = listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER).flatMap { category ->
@@ -395,7 +395,7 @@ private fun AmberHome() {
     }
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
-    CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f))) {
+    CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f), if (themeMode == 1) Color(0xFF17232C) else Color.White, if (themeMode == 1) Color(0xFF52616A) else Color.White.copy(alpha = .58f))) {
     Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -614,8 +614,8 @@ private fun WallpaperLibraryScreen(
                         Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(wallpaper.thumbnail, wallpaper.title, Modifier.size(width = 58.dp, height = 38.dp).clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
                             Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(wallpaper.title, color = Color.White, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
-                                Text(wallpaper.category, color = Color.White.copy(alpha = .58f), fontSize = 11.sp)
+                                Text(wallpaper.title, color = LocalAmberPalette.current.text, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+                                Text(wallpaper.category, color = LocalAmberPalette.current.mutedText, fontSize = 11.sp)
                             }
                             if (selected) Text("✓", color = LocalAmberPalette.current.accent, fontSize = 18.sp, modifier = Modifier.padding(end = 4.dp))
                         }
@@ -687,11 +687,11 @@ private fun SettingsTile(title: String, value: String, hint: String, glyph: Stri
         colors = ClickableSurfaceDefaults.colors(containerColor = palette.surface, focusedContainerColor = palette.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.025f)) {
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 15.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Text(glyph, color = Color.White.copy(alpha = .9f), fontSize = 25.sp, fontWeight = FontWeight.Light)
+            Text(glyph, color = palette.text.copy(alpha = .9f), fontSize = 25.sp, fontWeight = FontWeight.Light)
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text(value, color = Color.White.copy(alpha = .88f), fontSize = 14.sp)
-                Text(hint, color = Color.White.copy(alpha = .52f), fontSize = 11.sp)
+                Text(title, color = palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text(value, color = palette.text.copy(alpha = .88f), fontSize = 14.sp)
+                Text(hint, color = palette.mutedText.copy(alpha = .9f), fontSize = 11.sp)
             }
         }
     }
@@ -733,7 +733,7 @@ private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Bo
             Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(if (removeIconBackground) 17.dp else 17.dp)), contentScale = ContentScale.Fit,
                 colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.height(10.dp))
-            Text(app.label, color = Color.White, fontSize = 15.sp, fontFamily = font, maxLines = 1)
+            Text(app.label, color = LocalAmberPalette.current.text, fontSize = 15.sp, fontFamily = font, maxLines = 1)
         }
     }
 }
