@@ -764,13 +764,20 @@ private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .graphicsLayer { if (isMoving) { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } }
-            .onKeyEvent { event ->
-                if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
-                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
-                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionCenter) { onClick(); true }
-                else false
-            }
-            .pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
+            .onPreviewKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) {
+                    onMove(-1); true
+                } else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                    onMove(1); true
+                } else if (isMoving && event.type == KeyEventType.KeyDown && isOkKey) {
+                    onClick(); true
+                } else if (!isMoving && !wiggle && isOkKey &&
+                    native.action == android.view.KeyEvent.ACTION_DOWN && native.repeatCount >= 1) {
+                    onLongPress(); true
+                } else false
+            },
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
