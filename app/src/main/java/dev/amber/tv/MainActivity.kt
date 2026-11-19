@@ -46,6 +46,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
@@ -234,6 +235,9 @@ private fun AmberHome() {
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
     var dockWiggle by remember { mutableStateOf(false) }
+    var dockActionPackage by remember { mutableStateOf<String?>(null) }
+    var movingDockPackage by remember { mutableStateOf<String?>(null) }
+    var showAddDockDialog by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
     var dockFocusedIndex by remember { mutableIntStateOf(-1) }
@@ -267,7 +271,9 @@ private fun AmberHome() {
     fun launch(app: InstalledTvApp) {
         runCatching { context.startActivity(Intent(Intent.ACTION_MAIN).setClassName(app.packageName, app.activityName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
-    BackHandler(screen != Screen.HOME || dockWiggle) { if (dockWiggle) dockWiggle = false else screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
+    BackHandler(showAddDockDialog || dockActionPackage != null || movingDockPackage != null || screen != Screen.HOME || dockWiggle) {
+        when { showAddDockDialog -> showAddDockDialog = false; dockActionPackage != null -> dockActionPackage = null; movingDockPackage != null -> movingDockPackage = null; dockWiggle -> dockWiggle = false; else -> screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
+    }
     // Keep the Home clock live; switching back from Settings updates it immediately.
     LaunchedEffect(screen) {
         if (screen == Screen.HOME) {
@@ -332,8 +338,7 @@ private fun AmberHome() {
                     }
                 }
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
-                if (dockApps.isEmpty()) Text("Your dock is empty. Open Launcher Settings to add apps.", color = Color.White, modifier = Modifier.align(Alignment.Center), fontSize = 20.sp)
-                else {
+                {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
                         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
@@ -353,9 +358,10 @@ private fun AmberHome() {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
                                 AppDockItem(app, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
-                                    onLongPress = { dockWiggle = true },
-                                    onRemove = { saveDock(dock - app.packageName); if (dock.size <= 1) dockWiggle = false },
-                                    onClick = { if (dockWiggle) dockWiggle = false else launch(app) },
+                                    isMoving = movingDockPackage == app.packageName,
+                                    onLongPress = { dockActionPackage = app.packageName },
+                                    onRemove = { saveDock(dock - app.packageName); dockActionPackage = null },
+                                    onClick = { if (movingDockPackage == app.packageName) movingDockPackage = null else if (dockWiggle) dockWiggle = false else launch(app) },
                                     onFocused = {
                                         val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
                                         lastDockFocusedIndex = index
@@ -380,6 +386,9 @@ private fun AmberHome() {
                                     },
                                     onMove = { delta -> moveDockItem(index, delta) }
                                 )
+                            }
+                            item(key = "dock_add_button") {
+                                AddDockButton { showAddDockDialog = true }
                             }
                         }
                     }
@@ -410,6 +419,14 @@ private fun AmberHome() {
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
                 { index, delta -> val target = index + delta; if (target in dock.indices) { val next = dock.toMutableList(); val item = next.removeAt(index); next.add(target, item); saveDock(next) } })
         }
+        if (dockActionPackage != null) {
+            val selectedApp = apps.firstOrNull { it.packageName == dockActionPackage }
+            if (selectedApp != null) DockActionDialog(selectedApp, onDismiss = { dockActionPackage = null },
+                onMove = { movingDockPackage = selectedApp.packageName; dockActionPackage = null },
+                onRemove = { saveDock(dock - selectedApp.packageName); dockActionPackage = null })
+        }
+        if (showAddDockDialog) AddDockDialog(apps.filter { it.packageName !in dock }, iconMode, removeIconBackground, font,
+            onAdd = { selected -> saveDock(dock + selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
         if (splashVisible) AmberBootSplash()
     }
 }
@@ -609,7 +626,7 @@ private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Bo
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x70202D38), focusedContainerColor = Color(0xAA526779)),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(17.dp)), contentScale = ContentScale.Fit,
+            Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(if (removeIconBackground) 17.dp else 17.dp)), contentScale = ContentScale.Fit,
                 colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.height(10.dp))
             Text(app.label, color = Color.White, fontSize = 15.sp, fontFamily = font, maxLines = 1)
@@ -653,7 +670,7 @@ private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground:
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xAA18232C), focusedContainerColor = Color(0xDD435563))) {
         Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(bitmap, app.label, Modifier.size(34.dp), colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
+            Image(bitmap, app.label, Modifier.size(34.dp).clip(RoundedCornerShape(if (removeIconBackground) 8.dp else 0.dp)), colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
             Spacer(Modifier.width(16.dp)); Text(app.label, color = Color.White, fontSize = 16.sp, fontFamily = font)
         }
     }
@@ -670,27 +687,34 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val bitmap = remember(app.packageName, removeIconBackground) { appIconBitmap(app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface(onClick, Modifier.fillMaxSize().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .onKeyEvent { event ->
-                if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
-                else if (wiggle && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
+                if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft) { onMove(-1); true }
+                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) { onMove(1); true }
+                else if (isMoving && event.type == KeyEventType.KeyDown && event.key == Key.Enter) { onClick(); true }
                 else false
             }
             .pointerInput(app.packageName, wiggle) { detectTapGestures(onLongPress = { onLongPress() }) },
+            modifier = if (isMoving) Modifier.graphicsLayer { shadowElevation = 24f; scaleX = 1.08f; scaleY = 1.08f } else Modifier,
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(27.dp)),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color(0x32FFFFFF)),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = if (showAppNames) 10.dp else 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Image(bitmap, app.label, Modifier.size(if (showAppNames) 58.dp else 88.dp).clip(RoundedCornerShape(if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
+                Image(bitmap, app.label, Modifier.size(if (showAppNames) 58.dp else 88.dp).clip(RoundedCornerShape(if (removeIconBackground) 18.dp else if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
                     colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                 if (showAppNames) {
                     Spacer(Modifier.height(8.dp))
                     Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
                 }
+            }
+        }
+        if (isMoving) {
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).background(Color(0xDDC27A32), RoundedCornerShape(20.dp)).padding(horizontal = 9.dp, vertical = 3.dp)) {
+                Text("MOVE  ◀   ▶", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
         if (wiggle) {
