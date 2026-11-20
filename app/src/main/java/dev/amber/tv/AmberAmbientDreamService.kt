@@ -177,6 +177,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             }
             "analog_clock" -> {
                 AmbientArt("digital")
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     AnalogClock(now.hour, now.minute, now.second)
                     if (showDate) Text(date, color = Color.White.copy(alpha = .8f), fontSize = 20.sp, modifier = Modifier.padding(top = 28.dp))
