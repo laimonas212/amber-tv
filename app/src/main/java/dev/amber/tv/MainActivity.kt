@@ -521,6 +521,15 @@ private fun AmberHome() {
                 onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
                 onAmbient = { screen = Screen.AMBIENT },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                onDefaultLauncher = {
+                    val candidates = listOf(
+                        Intent("android.settings.HOME_SETTINGS"),
+                        Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),
+                        Intent(Settings.ACTION_SETTINGS)
+                    )
+                    val target = candidates.firstOrNull { it.resolveActivity(context.packageManager) != null }
+                    target?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let { context.startActivity(it) }
+                },
                 onBack = { screen = Screen.HOME })
             Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } })
             Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
@@ -750,7 +759,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
@@ -766,6 +775,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
             item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
             item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
+            item { SettingsTile("Default launcher", "Choose Amber TV or Google TV", "Change which Home app opens when you press Home", "⌂", onDefaultLauncher) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
         }
     }
