@@ -21,7 +21,7 @@ private val ambientIntervals = listOf(1, 2, 5, 10)
 private val ambientPositions = listOf("Bottom left", "Bottom right", "Top left", "Top right", "Center")
 
 @Composable
-internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit) {
+internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit) {
     var showClock by remember { mutableStateOf(prefs.getBoolean("ambient_show_clock", true)) }
     var showDate by remember { mutableStateOf(prefs.getBoolean("ambient_show_date", true)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean("ambient_show_weather", false)) }
@@ -42,7 +42,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TvSurface(onClick = onBack, modifier = Modifier.size(width = 110.dp, height = 48.dp),
                 shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-                colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x332FFFFFF), focusedContainerColor = Color(0x664A86A8))) {
+                colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x33FFFFFF), focusedContainerColor = Color(0x664A86A8))) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("‹  Back", color = Color.White, fontSize = 16.sp) }
             }
             Spacer(Modifier.width(22.dp))
@@ -73,7 +73,8 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit)
                 }
             }
             item { Text("SYSTEM", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
-            item { Text("Choose Amber Ambient as the active screensaver in Android Settings. The idle timeout is controlled by the TV system, not by the launcher.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
+            item { AmbientAction("Android screensaver settings", "Select Amber Ambient and set idle timeout", "OPEN SETTINGS  ›", onOpenSystemSettings) }
+            item { Text("The idle timeout is controlled by the TV system. Amber Ambient must be selected once in Android Settings.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
         }
     }
 }
