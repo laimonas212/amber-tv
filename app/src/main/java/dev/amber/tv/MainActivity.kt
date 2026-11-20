@@ -470,8 +470,10 @@ private fun AmberHome() {
     BackHandler(showAddDockDialog || dockActionPackage != null || movingDockPackage != null || screen != Screen.HOME || dockWiggle) {
         when { showAddDockDialog -> showAddDockDialog = false; dockActionPackage != null -> dockActionPackage = null; movingDockPackage != null -> movingDockPackage = null; dockWiggle -> dockWiggle = false; else -> screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     }
-    LaunchedEffect(screen, activeProfileId, ambientAutoStartEnabled, ambientAutoStartMinutes, homeInteractionTick, activityResumed) {
-        if (screen == Screen.HOME && activityResumed && ambientAutoStartEnabled) {
+    LaunchedEffect(screen, activeProfileId, ambientAutoStartEnabled, ambientAutoStartMinutes, homeInteractionTick, activityResumed, showProfiles, renameProfile, showAddDockDialog, dockActionPackage, movingDockPackage, dockWiggle) {
+        if (screen == Screen.HOME && activityResumed && ambientAutoStartEnabled &&
+            !showProfiles && renameProfile == null && !showAddDockDialog && dockActionPackage == null &&
+            movingDockPackage == null && !dockWiggle) {
             delay(ambientAutoStartMinutes * 60_000L)
             startAmbient()
         }
