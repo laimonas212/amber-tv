@@ -11,6 +11,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Xml
+import org.xmlpull.v1.XmlPullParser
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -222,18 +224,26 @@ private data class InstalledTvApp(val packageName: String, val activityName: Str
 private data class InstalledIconPack(val packageName: String, val label: String)
 
 private fun loadInstalledIconPacks(pm: PackageManager): List<InstalledIconPack> {
-    val actions = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME")
+    val actions = listOf(
+        "org.adw.launcher.THEMES",
+        "org.adw.ActivityStarter.THEMES",
+        "com.novalauncher.THEME",
+        "com.teslacoilsw.launcher.THEME"
+    )
     return actions.flatMap { action ->
         @Suppress("DEPRECATION")
         pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA)
     }.mapNotNull { info ->
         val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
         runCatching {
-            val res = pm.getResourcesForApplication(pkg)
-            res.assets.open("appfilter.xml").close()
+            val resources = pm.getResourcesForApplication(pkg)
+            val hasFilter = resources.getIdentifier("appfilter", "xml", pkg) != 0 ||
+                resources.getIdentifier("appfilter", "raw", pkg) != 0 ||
+                runCatching { resources.assets.open("appfilter.xml").close(); true }.getOrDefault(false)
+            if (!hasFilter) return@runCatching null
             InstalledIconPack(pkg, info.loadLabel(pm)?.toString() ?: pkg)
         }.getOrNull()
-    }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+    }.filterNotNull().distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
 }
 
 private fun currentIconPack(context: Context): String {
@@ -241,19 +251,64 @@ private fun currentIconPack(context: Context): String {
     return context.getSharedPreferences("amber_tv_$active", 0).getString(KEY_ICON_PACK, "") ?: ""
 }
 
+private fun parseIconPackFilter(parser: XmlPullParser): List<Pair<String, String>> {
+    val mappings = mutableListOf<Pair<String, String>>()
+    while (parser.next() != XmlPullParser.END_DOCUMENT) {
+        if (parser.eventType == XmlPullParser.START_TAG && parser.name.equals("item", ignoreCase = true)) {
+            val component = parser.getAttributeValue(null, "component")?.trim().orEmpty()
+            val drawable = parser.getAttributeValue(null, "drawable")?.trim().orEmpty()
+            if (component.isNotBlank() && drawable.isNotBlank()) {
+                val normalized = component.removePrefix("ComponentInfo{").removeSuffix("}")
+                mappings += normalized to drawable
+            }
+        }
+    }
+    return mappings
+}
+
+private fun readIconPackMappings(resources: android.content.res.Resources, packageName: String): List<Pair<String, String>> {
+    val xmlId = resources.getIdentifier("appfilter", "xml", packageName)
+    if (xmlId != 0) {
+        runCatching {
+            val parser = resources.getXml(xmlId)
+            try { parseIconPackFilter(parser) } finally { parser.close() }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+
+    val rawId = resources.getIdentifier("appfilter", "raw", packageName)
+    if (rawId != 0) {
+        runCatching {
+            resources.openRawResource(rawId).use { stream ->
+                val parser = Xml.newPullParser()
+                parser.setInput(stream, "UTF-8")
+                parseIconPackFilter(parser)
+            }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+
+    return runCatching {
+        resources.assets.open("appfilter.xml").buffered().use { stream ->
+            val parser = Xml.newPullParser()
+            parser.setInput(stream, "UTF-8")
+            parseIconPackFilter(parser)
+        }
+    }.getOrDefault(emptyList())
+}
+
 private fun themedAppIcon(context: Context, app: InstalledTvApp): Drawable? {
     val pack = currentIconPack(context).takeIf { it.isNotBlank() } ?: return null
     return runCatching {
-        val res = context.packageManager.getResourcesForApplication(pack)
-        val xml = res.assets.open("appfilter.xml").bufferedReader().use { it.readText() }
-        val entries = Regex("""<item\s+component="ComponentInfo\{([^}]+)}"\s+drawable="([^"]+)"\s*/>""", RegexOption.DOT_MATCHES_ALL)
-            .findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        val resources = context.packageManager.getResourcesForApplication(pack)
+        val entries = readIconPackMappings(resources, pack)
         val exact = app.packageName + "/" + app.activityName
-        val name = entries.firstOrNull { it.first == exact || it.first == "/" + app.activityName }?.second
-            ?: entries.firstOrNull { it.first.startsWith(app.packageName + "/") }?.second
+        val exactShort = app.packageName + "/" + app.activityName.removePrefix(app.packageName)
+        val name = entries.firstOrNull { it.first == exact || it.first == exactShort }?.second
+            ?: entries.firstOrNull { it.first.substringBefore("/") == app.packageName }?.second
             ?: return@runCatching null
-        val id = res.getIdentifier(name, "drawable", pack).takeIf { it != 0 } ?: res.getIdentifier(name, "mipmap", pack)
-        if (id == 0) null else res.getDrawable(id, null)
+        val id = resources.getIdentifier(name, "drawable", pack).takeIf { it != 0 }
+            ?: resources.getIdentifier(name, "mipmap", pack).takeIf { it != 0 }
+            ?: return@runCatching null
+        resources.getDrawable(id, null)
     }.getOrNull()
 }
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
@@ -1037,7 +1092,7 @@ private fun AddDockDialog(
                 ) {
                     gridItems(apps, key = { it.packageName }) { app ->
                         val isSelected = app.packageName in selected
-                        val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
+                        val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
                         @OptIn(ExperimentalTvMaterial3Api::class)
                         TvSurface(
                             onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
@@ -1086,7 +1141,7 @@ private fun AddDockDialog(
 @Composable
 private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused, isMoving, itemIndex) {
