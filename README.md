@@ -69,6 +69,17 @@ adb shell cmd package set-home-activity com.google.android.apps.tv.launcherx/.ho
 
 The exact HOME routing on Philips firmware may differ. No system package is disabled by this project or its installer.
 
+## Amber Ambient screensaver
+
+Amber Ambient is registered as an Android `DreamService` and can be selected in the TV's Android screensaver settings.
+
+- Settings are stored in the active Amber TV profile.
+- Clock and date visibility, 12/24-hour time, optional Vilnius weather, image rotation interval, clock position and dimming are configurable.
+- Backgrounds reuse the cached remote wallpaper catalog, so the screensaver can start with the last successful catalog while offline.
+- Open Amber TV → Settings → Amber Ambient → Android screensaver settings, then select Amber Ambient and choose the system idle timeout.
+
+The Philips TV's own screensaver policy and power behavior still need validation on the TA1 device. The app cannot silently change Android's protected screensaver selection or system idle timeout.
+
 ## Status
 
 Milestone 1: first launcher prototype with a cinematic home screen, installed TV-app discovery, actual app icons, remote focus, and app launching. Next: run the APK on the Philips TA1, refine focus/layout from the real screen, then validate HOME-key routing and rollback behavior.
