@@ -132,8 +132,12 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             delay(interval * 60_000L)
             val nextIndex = (wallpaperIndex + 1) % wallpapers.size
             val request = ImageRequest.Builder(context).data(wallpapers[nextIndex].url).build()
-            val result = runCatching { imageLoader.execute(request) }.getOrNull()
-            if (result is SuccessResult) wallpaperIndex = nextIndex
+            val loaded = try {
+                imageLoader.execute(request) is SuccessResult
+            } catch (_: Exception) {
+                false
+            }
+            if (loaded) wallpaperIndex = nextIndex
         }
     }
     LaunchedEffect(Unit) {
