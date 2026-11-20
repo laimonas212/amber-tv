@@ -243,7 +243,7 @@ private fun loadInstalledIconPacks(pm: PackageManager): List<InstalledIconPack> 
             if (!hasFilter) return@runCatching null
             InstalledIconPack(pkg, info.loadLabel(pm)?.toString() ?: pkg)
         }.getOrNull()
-    }.filterNotNull().distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+    }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
 }
 
 private fun currentIconPack(context: Context): String {
