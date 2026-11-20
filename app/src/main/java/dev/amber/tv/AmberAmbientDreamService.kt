@@ -251,10 +251,10 @@ private fun AnalogClock(hour: Int, minute: Int, second: Int) {
         val hourAngle = ((hour % 12) + minute / 60f) * (Math.PI / 6.0) - Math.PI / 2.0
         val minuteAngle = (minute + second / 60f) * (Math.PI / 30.0) - Math.PI / 2.0
         val secondAngle = second * (Math.PI / 30.0) - Math.PI / 2.0
-        drawLine(Color.White, center, Offset(center.x + cos(hourAngle).toFloat() * radius * .48f, center.y + sin(hourAngle).toFloat() * radius * .48f), 5.dp.toPx(), StrokeCap.Round)
-        drawLine(Color.White.copy(alpha = .9f), center, Offset(center.x + cos(minuteAngle).toFloat() * radius * .72f, center.y + sin(minuteAngle).toFloat() * radius * .72f), 3.dp.toPx(), StrokeCap.Round)
+        drawLine(Color.White, center, Offset(center.x + cos(hourAngle).toFloat() * radius * .48f, center.y + sin(hourAngle).toFloat() * radius * .48f), 5.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(Color.White.copy(alpha = .9f), center, Offset(center.x + cos(minuteAngle).toFloat() * radius * .72f, center.y + sin(minuteAngle).toFloat() * radius * .72f), 3.dp.toPx(), cap = StrokeCap.Round)
         drawLine(Color(0xFF83C7FF), Offset(center.x - cos(secondAngle).toFloat() * radius * .12f, center.y - sin(secondAngle).toFloat() * radius * .12f),
-            Offset(center.x + cos(secondAngle).toFloat() * radius * .78f, center.y + sin(secondAngle).toFloat() * radius * .78f), 1.5.dp.toPx(), StrokeCap.Round)
+            Offset(center.x + cos(secondAngle).toFloat() * radius * .78f, center.y + sin(secondAngle).toFloat() * radius * .78f), 1.5.dp.toPx(), cap = StrokeCap.Round)
         drawCircle(Color(0xFF83C7FF), 5.dp.toPx(), center)
     }
 }
