@@ -1,0 +1,100 @@
+package dev.amber.tv
+
+import android.service.dreams.DreamService
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.delay
+import org.json.JSONObject
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+class AmberAmbientDreamService : DreamService() {
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        isInteractive = false
+        isFullscreen = true
+        setContentView(ComposeView(this).apply {
+            setContent { AmberAmbientContent(this@AmberAmbientDreamService) }
+        })
+    }
+}
+
+private data class AmbientWallpaper(val url: String, val title: String)
+
+@Composable
+private fun AmberAmbientContent(context: android.content.Context) {
+    val meta = remember { context.getSharedPreferences("amber_tv_profiles", 0) }
+    val profileId = remember { meta.getString("active_profile", "profile_1") ?: "profile_1" }
+    val prefs = remember { context.getSharedPreferences("amber_tv_$profileId", 0) }
+    val showClock = remember { prefs.getBoolean("ambient_show_clock", true) }
+    val showDate = remember { prefs.getBoolean("ambient_show_date", true) }
+    val showWeather = remember { prefs.getBoolean("ambient_show_weather", false) }
+    val use24Hour = remember { prefs.getBoolean("ambient_24_hour", true) }
+    val interval = remember { prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10) }
+    val position = remember { prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4) }
+    val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f) }
+    val wallpapers = remember {
+        runCatching {
+            val raw = prefs.getString("remote_wallpaper_catalog", null) ?: return@runCatching emptyList()
+            val array = JSONObject(raw).getJSONArray("wallpapers")
+            (0 until array.length()).mapNotNull { i ->
+                val item = array.getJSONObject(i)
+                val url = item.optString("url")
+                if (url.startsWith("https://")) AmbientWallpaper(url, item.optString("title", "Amber Ambient")) else null
+            }
+        }.getOrDefault(emptyList())
+    }
+    var wallpaperIndex by remember { mutableIntStateOf(0) }
+    var now by remember { mutableStateOf(LocalDateTime.now()) }
+    var drift by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) { now = LocalDateTime.now(); delay(1000L) }
+    }
+    LaunchedEffect(wallpapers.size, interval) {
+        while (wallpapers.size > 1) { delay(interval * 60_000L); wallpaperIndex = (wallpaperIndex + 1) % wallpapers.size }
+    }
+    LaunchedEffect(Unit) {
+        while (true) { delay(60_000L); drift = (drift + 1) % 5 }
+    }
+    val align = when (position) {
+        1 -> Alignment.BottomEnd
+        2 -> Alignment.TopStart
+        3 -> Alignment.TopEnd
+        4 -> Alignment.Center
+        else -> Alignment.BottomStart
+    }
+    val time = now.format(DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a", Locale.getDefault()))
+    val date = now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+    val offsets = listOf(0, 8, -8, 14, -14)
+    val offset = offsets[drift]
+    Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
+        if (wallpapers.isNotEmpty()) {
+            Crossfade(targetState = wallpaperIndex, label = "ambient-wallpaper") { index ->
+                AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize())
+            }
+        }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+        Box(Modifier.fillMaxSize().padding(horizontal = 88.dp, vertical = 64.dp), contentAlignment = align) {
+            Column(horizontalAlignment = when (position) { 1, 3 -> Alignment.End; 4 -> Alignment.CenterHorizontally; else -> Alignment.Start },
+                modifier = Modifier.offset(x = offset.dp, y = (-offset).dp)) {
+                if (showClock) Text(time, color = Color.White, fontSize = 76.sp, fontWeight = FontWeight.ExtraLight, letterSpacing = (-2).sp)
+                if (showDate) Text(date, color = Color.White.copy(alpha = .82f), fontSize = 20.sp, fontWeight = FontWeight.Light)
+                if (showWeather) Text("VILNIUS", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+        if (wallpapers.isEmpty()) Text("AMBER AMBIENT", color = Color.White.copy(alpha = .35f), fontSize = 12.sp, letterSpacing = 4.sp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(28.dp))
+    }
+}
