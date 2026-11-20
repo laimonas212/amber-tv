@@ -403,7 +403,7 @@ private fun AmberHome() {
     fun startAmbient() {
         runCatching {
             context.startActivity(Intent(context, AmberAmbientActivity::class.java))
-            activity?.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            activity?.overridePendingTransition(R.anim.ambient_fade_in, R.anim.ambient_fade_out)
         }
     }
     DisposableEffect(activity) {
