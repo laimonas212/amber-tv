@@ -37,7 +37,7 @@ class AmberAmbientActivity : ComponentActivity() {
             return super.onKeyDown(keyCode, event)
         }
         finish()
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+        overridePendingTransition(R.anim.ambient_fade_in, R.anim.ambient_fade_out)
         return true
     }
 }
