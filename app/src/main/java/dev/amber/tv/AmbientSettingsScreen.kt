@@ -17,8 +17,11 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface as TvSurface
 
-private val ambientIntervals = listOf(1, 2, 5, 10)
+private val ambientIntervals = listOf(1, 2, 5, 10, 15, 30)
 private val ambientPositions = listOf("Bottom left", "Bottom right", "Top left", "Top right", "Center")
+private val ambientModeValues = listOf("slideshow", "digital_clock", "analog_clock", "generative", "aurora", "weather")
+private val ambientModeLabels = listOf("Photo slideshow", "Digital clock", "Analog clock", "Generative art", "Aurora scenes", "Weather dashboard")
+private val autoStartIntervals = listOf(1, 2, 5, 10, 15, 30)
 
 @Composable
 internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit, onStartNow: () -> Unit) {
@@ -26,18 +29,24 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var showDate by remember { mutableStateOf(prefs.getBoolean("ambient_show_date", true)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean("ambient_show_weather", false)) }
     var use24Hour by remember { mutableStateOf(prefs.getBoolean("ambient_24_hour", true)) }
-    var interval by remember { mutableIntStateOf(prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10)) }
+    var interval by remember { mutableIntStateOf(prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 30)) }
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
     var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f)) }
+    var mode by remember { mutableStateOf(prefs.getString("ambient_mode", "slideshow") ?: "slideshow") }
+    var autoStart by remember { mutableStateOf(prefs.getBoolean("ambient_auto_start_enabled", false)) }
+    var autoStartMinutes by remember { mutableIntStateOf(prefs.getInt("ambient_auto_start_minutes", 10).coerceIn(1, 30)) }
+
     fun save(key: String, value: Any) {
         prefs.edit().apply {
             when (value) {
                 is Boolean -> putBoolean(key, value)
                 is Int -> putInt(key, value)
                 is Float -> putFloat(key, value)
+                is String -> putString(key, value)
             }
         }.apply()
     }
+
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 28.dp, bottom = 24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TvSurface(onClick = onBack, modifier = Modifier.size(width = 110.dp, height = 48.dp),
@@ -53,12 +62,20 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
         }
         Spacer(Modifier.height(22.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-            item { Text("DISPLAY", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp) }
+            item { Text("DISPLAY MODES", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp) }
+            item {
+                val selected = ambientModeValues.indexOf(mode).coerceAtLeast(0)
+                AmbientChoice("Ambient mode", ambientModeLabels[selected], ambientModeLabels, selected) {
+                    mode = ambientModeValues[it]
+                    save("ambient_mode", mode)
+                }
+            }
+            item { Text("DISPLAY", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 6.dp)) }
             item { AmbientToggle("Clock", "Show a large cinematic clock", showClock) { showClock = it; save("ambient_show_clock", it) } }
             item { AmbientToggle("Date", "Show the current date below the clock", showDate) { showDate = it; save("ambient_show_date", it) } }
             item { AmbientToggle("Weather", "Show current temperature in Vilnius", showWeather) { showWeather = it; save("ambient_show_weather", it) } }
             item { AmbientToggle("24-hour clock", "Use 16:45 instead of 4:45 PM", use24Hour) { use24Hour = it; save("ambient_24_hour", it) } }
-            item { AmbientChoice("Background rotation", "Change to another image every $interval minute(s)", ambientIntervals.map { "$it min" }, ambientIntervals.indexOf(interval).coerceAtLeast(0)) { interval = ambientIntervals[it]; save("ambient_interval_minutes", interval) } }
+            item { AmbientChoice("Background rotation", "Change to another image every " + interval + " minute(s)", ambientIntervals.map { "$it min" }, ambientIntervals.indexOf(interval).coerceAtLeast(0)) { interval = ambientIntervals[it]; save("ambient_interval_minutes", interval) } }
             item { AmbientChoice("Clock position", ambientPositions[position], ambientPositions, position) { position = it; save("ambient_clock_position", it) } }
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0x33202B35)).padding(horizontal = 20.dp, vertical = 14.dp)) {
@@ -67,15 +84,20 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
                             Text("OLED dimming", color = Color.White, fontSize = 17.sp)
                             Text("Darken the image to reduce static brightness", color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
                         }
-                        Text("${(dim * 100).toInt()}%", color = Color(0xFFB9D9F3), fontSize = 16.sp)
+                        Text((dim * 100).toInt().toString() + "%", color = Color(0xFFB9D9F3), fontSize = 16.sp)
                     }
                     Slider(value = dim, onValueChange = { dim = it }, onValueChangeFinished = { save("ambient_dim", dim) }, valueRange = 0f..0.65f)
                 }
             }
+            item { Text("AUTOMATIC START", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
+            item { AmbientToggle("Start after Home is idle", "Launch Ambient automatically when the Home screen is inactive", autoStart) { autoStart = it; save("ambient_auto_start_enabled", it) } }
+            if (autoStart) {
+                item { AmbientChoice("Idle timeout", "Start after " + autoStartMinutes + " minutes without remote input", autoStartIntervals.map { "$it min" }, autoStartIntervals.indexOf(autoStartMinutes).coerceAtLeast(0)) { autoStartMinutes = autoStartIntervals[it]; save("ambient_auto_start_minutes", autoStartMinutes) } }
+            }
             item { AmbientAction("Start Amber Ambient now", "Launch the full-screen Ambient display immediately", "START NOW  ›", onStartNow) }
             item { Text("SYSTEM", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
             item { AmbientAction("Android screensaver settings", "Select Amber Ambient and set idle timeout", "OPEN SETTINGS  ›", onOpenSystemSettings) }
-            item { Text("The idle timeout is controlled by the TV system. Amber Ambient must be selected once in Android Settings.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
+            item { Text("Automatic start works while Amber TV Home is open. Android system screensaver timing remains controlled separately by the TV.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
         }
     }
 }

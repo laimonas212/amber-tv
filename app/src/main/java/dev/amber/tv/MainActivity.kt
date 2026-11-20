@@ -16,6 +16,8 @@ import org.xmlpull.v1.XmlPullParser
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -394,6 +396,27 @@ private fun AmberHome() {
     val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
     val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
     var screen by remember { mutableStateOf(Screen.HOME) }
+    var homeInteractionTick by remember { mutableIntStateOf(0) }
+    var activityResumed by remember { mutableStateOf(true) }
+    val ambientAutoStartEnabled = prefs.getBoolean("ambient_auto_start_enabled", false)
+    val ambientAutoStartMinutes = prefs.getInt("ambient_auto_start_minutes", 10).coerceIn(1, 30)
+    fun startAmbient() {
+        runCatching {
+            context.startActivity(Intent(context, AmberAmbientActivity::class.java))
+            activity?.overridePendingTransition(R.anim.ambient_fade_in, R.anim.ambient_fade_out)
+        }
+    }
+    DisposableEffect(activity) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> activityResumed = true
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> activityResumed = false
+                else -> Unit
+            }
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
     var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
     val mono = iconMode != 0
     var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
@@ -447,6 +470,14 @@ private fun AmberHome() {
     BackHandler(showAddDockDialog || dockActionPackage != null || movingDockPackage != null || screen != Screen.HOME || dockWiggle) {
         when { showAddDockDialog -> showAddDockDialog = false; dockActionPackage != null -> dockActionPackage = null; movingDockPackage != null -> movingDockPackage = null; dockWiggle -> dockWiggle = false; else -> screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     }
+    LaunchedEffect(screen, activeProfileId, ambientAutoStartEnabled, ambientAutoStartMinutes, homeInteractionTick, activityResumed, showProfiles, renameProfile, showAddDockDialog, dockActionPackage, movingDockPackage, dockWiggle) {
+        if (screen == Screen.HOME && activityResumed && ambientAutoStartEnabled &&
+            !showProfiles && renameProfile == null && !showAddDockDialog && dockActionPackage == null &&
+            movingDockPackage == null && !dockWiggle) {
+            delay(ambientAutoStartMinutes * 60_000L)
+            startAmbient()
+        }
+    }
     // Keep the Home clock live; switching back from Settings updates it immediately.
     LaunchedEffect(screen) {
         if (screen == Screen.HOME) {
@@ -489,7 +520,14 @@ private fun AmberHome() {
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f), if (themeMode == 1) Color(0xFF17232C) else Color.White, if (themeMode == 1) Color(0xFF52616A) else Color.White.copy(alpha = .58f))) {
-    Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
+    Box(
+        Modifier.fillMaxSize()
+            .background(surfaceColors[surfaceChoice])
+            .onPreviewKeyEvent { event ->
+                if (screen == Screen.HOME && event.type == KeyEventType.KeyDown) homeInteractionTick++
+                false
+            }
+    ) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
@@ -593,7 +631,7 @@ private fun AmberHome() {
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onDefaultLauncher = { screen = Screen.LAUNCHER },
                 onBack = { screen = Screen.HOME })
-            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { startAmbient() })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
                 onBack = { screen = Screen.SETTINGS },
                 onAmberTv = {
@@ -847,7 +885,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
-            item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
+            item { SettingsTile("Amber Ambient", "Screensaver · customize", "Slideshow, clocks, generative art, auto start", "◷", onAmbient) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
             item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
             item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
