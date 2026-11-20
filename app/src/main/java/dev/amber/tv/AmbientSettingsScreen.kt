@@ -108,3 +108,18 @@ private fun AmbientChoice(title: String, value: String, options: List<String>, s
         }
     }
 }
+
+@Composable
+private fun AmbientAction(title: String, value: String, hint: String, onClick: () -> Unit) {
+    TvSurface(onClick = onClick, modifier = Modifier.fillMaxWidth().height(68.dp),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x33202B35), focusedContainerColor = Color(0x66517FA0))) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, color = Color.White, fontSize = 16.sp)
+                Text(value, color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
+            }
+            Text(hint, color = Color(0xFF9FD5FF), fontSize = 11.sp)
+        }
+    }
+}
