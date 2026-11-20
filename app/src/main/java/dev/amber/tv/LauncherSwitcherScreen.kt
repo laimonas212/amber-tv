@@ -22,7 +22,7 @@ internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, o
     ) {
         TvSurface(onClick = onBack, modifier = Modifier.size(width = 110.dp, height = 48.dp),
             shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(14.dp)),
-            colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x332FFFFFF), focusedContainerColor = Color(0x664A86A8))) {
+            colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x33FFFFFF), focusedContainerColor = Color(0x664A86A8))) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("‹  Back", color = Color.White, fontSize = 16.sp) }
         }
         Text("Default launcher", color = Color.White, fontSize = 30.sp)
