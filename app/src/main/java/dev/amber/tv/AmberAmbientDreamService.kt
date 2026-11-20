@@ -65,7 +65,7 @@ class AmberAmbientDreamService : DreamService(), LifecycleOwner {
 private data class AmbientWallpaper(val url: String, val title: String)
 
 @Composable
-private fun AmberAmbientContent(context: android.content.Context) {
+internal fun AmberAmbientContent(context: android.content.Context) {
     val meta = remember { context.getSharedPreferences("amber_tv_profiles", 0) }
     val profileId = remember { meta.getString("active_profile", "profile_1") ?: "profile_1" }
     val prefs = remember { context.getSharedPreferences("amber_tv_$profileId", 0) }
