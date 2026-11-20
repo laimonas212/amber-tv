@@ -402,7 +402,7 @@ private fun AmberHome() {
     val ambientAutoStartMinutes = prefs.getInt("ambient_auto_start_minutes", 10).coerceIn(1, 30)
     fun startAmbient() {
         runCatching {
-            context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent(context, AmberAmbientActivity::class.java))
             activity?.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
     }
