@@ -1,6 +1,10 @@
 package dev.amber.tv
 
 import android.service.dreams.DreamService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewTreeLifecycleOwner
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,14 +29,37 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class AmberAmbientDreamService : DreamService() {
+class AmberAmbientDreamService : DreamService(), LifecycleOwner {
+    private val dreamLifecycle by lazy { LifecycleRegistry(this) }
+    override val lifecycle: Lifecycle get() = dreamLifecycle
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         isInteractive = false
         isFullscreen = true
-        setContentView(ComposeView(this).apply {
+        val composeView = ComposeView(this).apply {
+            ViewTreeLifecycleOwner.set(this, this@AmberAmbientDreamService)
             setContent { AmberAmbientContent(this@AmberAmbientDreamService) }
-        })
+        }
+        setContentView(composeView)
+    }
+
+    override fun onDreamingStarted() {
+        super.onDreamingStarted()
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    }
+
+    override fun onDreamingStopped() {
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        super.onDreamingStopped()
+    }
+
+    override fun onDetachedFromWindow() {
+        dreamLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        super.onDetachedFromWindow()
     }
 }
 
