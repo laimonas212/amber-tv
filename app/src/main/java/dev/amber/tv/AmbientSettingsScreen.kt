@@ -21,7 +21,7 @@ private val ambientIntervals = listOf(1, 2, 5, 10)
 private val ambientPositions = listOf("Bottom left", "Bottom right", "Top left", "Top right", "Center")
 
 @Composable
-internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit) {
+internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit, onStartNow: () -> Unit) {
     var showClock by remember { mutableStateOf(prefs.getBoolean("ambient_show_clock", true)) }
     var showDate by remember { mutableStateOf(prefs.getBoolean("ambient_show_date", true)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean("ambient_show_weather", false)) }
@@ -72,6 +72,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
                     Slider(value = dim, onValueChange = { dim = it }, onValueChangeFinished = { save("ambient_dim", dim) }, valueRange = 0f..0.65f)
                 }
             }
+            item { AmbientAction("Start Amber Ambient now", "Launch the full-screen Ambient display immediately", "START NOW  ›", onStartNow) }
             item { Text("SYSTEM", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
             item { AmbientAction("Android screensaver settings", "Select Amber Ambient and set idle timeout", "OPEN SETTINGS  ›", onOpenSystemSettings) }
             item { Text("The idle timeout is controlled by the TV system. Amber Ambient must be selected once in Android Settings.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
