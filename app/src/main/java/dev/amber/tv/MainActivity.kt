@@ -203,6 +203,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+private fun openHomeSettings(context: Context) {
+    val candidates = listOf(
+        Intent("android.settings.HOME_SETTINGS"),
+        Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),
+        Intent(Settings.ACTION_SETTINGS)
+    )
+    for (intent in candidates) {
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: Exception) { }
+    }
+}
+
 private data class InstalledTvApp(val packageName: String, val activityName: String, val label: String, val icon: Drawable)
 private data class InstalledIconPack(val packageName: String, val label: String)
 
@@ -269,7 +284,7 @@ private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveB
     outCanvas.drawBitmap(cropped,null,dest,android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
     return output
 }
-private enum class Screen { HOME, SETTINGS, WALLPAPERS, AMBIENT, ALL_APPS, MANAGE_DOCK }
+private enum class Screen { HOME, SETTINGS, WALLPAPERS, AMBIENT, LAUNCHER, ALL_APPS, MANAGE_DOCK }
 private data class AmberPalette(val surface: Color, val focus: Color, val accent: Color, val border: Color, val text: Color, val mutedText: Color)
 private val LocalAmberPalette = androidx.compose.runtime.staticCompositionLocalOf { AmberPalette(Color(0xB31A242B), Color(0xB34C6578), Color(0xFF78B7FF), Color(0x55FFFFFF), Color.White, Color.White.copy(alpha = .58f)) }
 
@@ -521,17 +536,24 @@ private fun AmberHome() {
                 onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
                 onAmbient = { screen = Screen.AMBIENT },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
-                onDefaultLauncher = {
-                    val candidates = listOf(
-                        Intent("android.settings.HOME_SETTINGS"),
-                        Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"),
-                        Intent(Settings.ACTION_SETTINGS)
-                    )
-                    val target = candidates.firstOrNull { it.resolveActivity(context.packageManager) != null }
-                    target?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let { context.startActivity(it) }
-                },
+                onDefaultLauncher = { screen = Screen.LAUNCHER },
                 onBack = { screen = Screen.HOME })
-            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } })
+            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+            Screen.LAUNCHER -> LauncherSwitcherScreen(
+                onBack = { screen = Screen.SETTINGS },
+                onAmberTv = {
+                    val manager = if (android.os.Build.VERSION.SDK_INT >= 29) context.getSystemService(android.app.role.RoleManager::class.java) else null
+                    val request = manager?.takeIf { it.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) }?.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME)
+                    if (request != null) runCatching { context.startActivity(request) }.onFailure { openHomeSettings(context) } else openHomeSettings(context)
+                },
+                onGoogleTv = {
+                    val googlePackage = "com.google.android.apps.tv.launcherx"
+                    val disabled = runCatching { !context.packageManager.getApplicationInfo(googlePackage, PackageManager.MATCH_DISABLED_COMPONENTS).enabled }.getOrDefault(false)
+                    if (disabled) {
+                        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$googlePackage"))) }.onFailure { openHomeSettings(context) }
+                    } else openHomeSettings(context)
+                }
+            )
             Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
                 Box(Modifier.fillMaxSize().background(Color(0xE9121B22)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
