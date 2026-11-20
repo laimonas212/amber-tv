@@ -4,7 +4,7 @@ import android.service.dreams.DreamService
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -38,7 +38,7 @@ class AmberAmbientDreamService : DreamService(), LifecycleOwner {
         isInteractive = false
         isFullscreen = true
         val composeView = ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, this@AmberAmbientDreamService)
+            setViewTreeLifecycleOwner(this@AmberAmbientDreamService)
             setContent { AmberAmbientContent(this@AmberAmbientDreamService) }
         }
         setContentView(composeView)
