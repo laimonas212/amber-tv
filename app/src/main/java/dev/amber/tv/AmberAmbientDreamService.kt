@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.request.ImageRequest
+import coil.request.SuccessResult
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -131,8 +132,8 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             delay(interval * 60_000L)
             val nextIndex = (wallpaperIndex + 1) % wallpapers.size
             val request = ImageRequest.Builder(context).data(wallpapers[nextIndex].url).build()
-            val loaded = runCatching { imageLoader.execute(request) }.isSuccess
-            if (loaded) wallpaperIndex = nextIndex
+            val result = runCatching { imageLoader.execute(request) }.getOrNull()
+            if (result is SuccessResult) wallpaperIndex = nextIndex
         }
     }
     LaunchedEffect(Unit) {
