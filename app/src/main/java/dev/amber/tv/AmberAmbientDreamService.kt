@@ -29,6 +29,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.ImageLoader
+import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +84,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val meta = remember { context.getSharedPreferences("amber_tv_profiles", 0) }
     val profileId = remember { meta.getString("active_profile", "profile_1") ?: "profile_1" }
     val prefs = remember { context.getSharedPreferences("amber_tv_$profileId", 0) }
+    val imageLoader = remember(context) { ImageLoader(context) }
     val mode = remember { prefs.getString("ambient_mode", "slideshow") ?: "slideshow" }
     val showClock = remember { prefs.getBoolean("ambient_show_clock", true) }
     val showDate = remember { prefs.getBoolean("ambient_show_date", true) }
@@ -123,10 +126,13 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             }
         } else temperature = null
     }
-    LaunchedEffect(wallpapers.size, interval, mode) {
+    LaunchedEffect(wallpapers.size, interval, mode, imageLoader) {
         if (mode == "slideshow") while (wallpapers.size > 1) {
             delay(interval * 60_000L)
-            wallpaperIndex = (wallpaperIndex + 1) % wallpapers.size
+            val nextIndex = (wallpaperIndex + 1) % wallpapers.size
+            val request = ImageRequest.Builder(context).data(wallpapers[nextIndex].url).build()
+            val loaded = runCatching { imageLoader.execute(request) }.isSuccess
+            if (loaded) wallpaperIndex = nextIndex
         }
     }
     LaunchedEffect(Unit) {
@@ -154,7 +160,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             "slideshow" -> {
                 if (wallpapers.isNotEmpty()) {
                     Crossfade(targetState = wallpaperIndex, animationSpec = tween(1800, easing = LinearEasing), label = "ambient-wallpaper") { index ->
-                        AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title,
+                        AsyncImage(model = wallpapers[index].url, imageLoader = imageLoader, contentDescription = wallpapers[index].title,
                             modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                 } else AmbientArt("generative")
