@@ -10,11 +10,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.setContent
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.URL
 import org.json.JSONObject
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -59,8 +64,23 @@ private fun AmberAmbientContent(context: android.content.Context) {
     var wallpaperIndex by remember { mutableIntStateOf(0) }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     var drift by remember { mutableIntStateOf(0) }
+    var temperature by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(Unit) {
         while (true) { now = LocalDateTime.now(); delay(1000L) }
+    }
+    LaunchedEffect(showWeather) {
+        if (showWeather) {
+            while (true) {
+                temperature = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val url = URL("https://api.open-meteo.com/v1/forecast?latitude=54.75&longitude=25.25&current=temperature_2m&timezone=Europe%2FVilnius")
+                        val json = JSONObject(url.openConnection().apply { connectTimeout = 5000; readTimeout = 5000 }.getInputStream().bufferedReader().use { it.readText() })
+                        json.getJSONObject("current").getDouble("temperature_2m").toInt()
+                    }.getOrNull()
+                }
+                delay(if (temperature == null) 120_000L else 1_800_000L)
+            }
+        } else temperature = null
     }
     LaunchedEffect(wallpapers.size, interval) {
         while (wallpapers.size > 1) { delay(interval * 60_000L); wallpaperIndex = (wallpaperIndex + 1) % wallpapers.size }
@@ -82,7 +102,7 @@ private fun AmberAmbientContent(context: android.content.Context) {
     Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
         if (wallpapers.isNotEmpty()) {
             Crossfade(targetState = wallpaperIndex, label = "ambient-wallpaper") { index ->
-                AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize())
+                AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
@@ -91,7 +111,7 @@ private fun AmberAmbientContent(context: android.content.Context) {
                 modifier = Modifier.offset(x = offset.dp, y = (-offset).dp)) {
                 if (showClock) Text(time, color = Color.White, fontSize = 76.sp, fontWeight = FontWeight.ExtraLight, letterSpacing = (-2).sp)
                 if (showDate) Text(date, color = Color.White.copy(alpha = .82f), fontSize = 20.sp, fontWeight = FontWeight.Light)
-                if (showWeather) Text("VILNIUS", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+                if (showWeather && temperature != null) Text("VILNIUS  ·  $temperature°", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
             }
         }
         if (wallpapers.isEmpty()) Text("AMBER AMBIENT", color = Color.White.copy(alpha = .35f), fontSize = 12.sp, letterSpacing = 4.sp,
