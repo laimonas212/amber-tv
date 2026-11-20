@@ -172,6 +172,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             }
             "digital_clock" -> {
                 AmbientArt("digital")
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
                 AmbientClockOverlay(time, date, temperature, showClock, showDate, showWeather, position, offset)
             }
             "analog_clock" -> {
@@ -184,14 +185,17 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             }
             "generative" -> {
                 AmbientArt("generative")
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
                 AmbientClockOverlay(time, date, temperature, showClock, showDate, showWeather, position, offset)
             }
             "aurora" -> {
                 AmbientArt("aurora")
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
                 AmbientClockOverlay(time, date, temperature, showClock, showDate, showWeather, position, offset)
             }
             "weather" -> {
                 AmbientArt("digital")
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
                 Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                     Text("VILNIUS", color = Color.White.copy(alpha = .62f), fontSize = 16.sp, letterSpacing = 5.sp)
                     Text(temperature?.let { "$it°" } ?: "—", color = Color.White, fontSize = 112.sp, fontWeight = FontWeight.ExtraLight)
@@ -214,8 +218,6 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             }
             if (wallpapers.isEmpty()) Text("AMBER AMBIENT", color = Color.White.copy(alpha = .35f), fontSize = 12.sp, letterSpacing = 4.sp,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(28.dp))
-        } else if (mode !in listOf("analog_clock", "weather")) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * .55f)))
         }
     }
 }
