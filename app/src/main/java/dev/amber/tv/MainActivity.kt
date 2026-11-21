@@ -11,9 +11,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Xml
+import org.xmlpull.v1.XmlPullParser
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -204,6 +208,34 @@ class MainActivity : ComponentActivity() {
 }
 
 
+private fun isGoogleTvHomeEnabled(context: Context): Boolean {
+    val pm = context.packageManager
+    val homeIntent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_HOME)
+        .addCategory(Intent.CATEGORY_DEFAULT)
+    val googleHome = runCatching {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DISABLED_COMPONENTS)
+            .firstOrNull { it.activityInfo?.packageName == "com.google.android.apps.tv.launcherx" }
+            ?.activityInfo
+    }.getOrNull() ?: return false
+
+    val component = android.content.ComponentName(googleHome.packageName, googleHome.name)
+    val componentState = runCatching { pm.getComponentEnabledSetting(component) }
+        .getOrDefault(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+    val componentDisabled = componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+        componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+    return googleHome.enabled && googleHome.applicationInfo.enabled && !componentDisabled
+}
+
+private fun openGoogleTvAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.parse("package:com.google.android.apps.tv.launcherx")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }.onFailure { openHomeSettings(context) }
+}
+
 private fun openHomeSettings(context: Context) {
     val candidates = listOf(
         Intent("android.settings.HOME_SETTINGS"),
@@ -222,15 +254,23 @@ private data class InstalledTvApp(val packageName: String, val activityName: Str
 private data class InstalledIconPack(val packageName: String, val label: String)
 
 private fun loadInstalledIconPacks(pm: PackageManager): List<InstalledIconPack> {
-    val actions = listOf("org.adw.launcher.THEMES", "com.novalauncher.THEME", "com.teslacoilsw.launcher.THEME")
+    val actions = listOf(
+        "org.adw.launcher.THEMES",
+        "org.adw.ActivityStarter.THEMES",
+        "com.novalauncher.THEME",
+        "com.teslacoilsw.launcher.THEME"
+    )
     return actions.flatMap { action ->
         @Suppress("DEPRECATION")
         pm.queryIntentActivities(Intent(action), PackageManager.GET_META_DATA)
     }.mapNotNull { info ->
         val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
         runCatching {
-            val res = pm.getResourcesForApplication(pkg)
-            res.assets.open("appfilter.xml").close()
+            val resources = pm.getResourcesForApplication(pkg)
+            val hasFilter = resources.getIdentifier("appfilter", "xml", pkg) != 0 ||
+                resources.getIdentifier("appfilter", "raw", pkg) != 0 ||
+                runCatching { resources.assets.open("appfilter.xml").close(); true }.getOrDefault(false)
+            if (!hasFilter) return@runCatching null
             InstalledIconPack(pkg, info.loadLabel(pm)?.toString() ?: pkg)
         }.getOrNull()
     }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
@@ -241,19 +281,64 @@ private fun currentIconPack(context: Context): String {
     return context.getSharedPreferences("amber_tv_$active", 0).getString(KEY_ICON_PACK, "") ?: ""
 }
 
+private fun parseIconPackFilter(parser: XmlPullParser): List<Pair<String, String>> {
+    val mappings = mutableListOf<Pair<String, String>>()
+    while (parser.next() != XmlPullParser.END_DOCUMENT) {
+        if (parser.eventType == XmlPullParser.START_TAG && parser.name.equals("item", ignoreCase = true)) {
+            val component = parser.getAttributeValue(null, "component")?.trim().orEmpty()
+            val drawable = parser.getAttributeValue(null, "drawable")?.trim().orEmpty()
+            if (component.isNotBlank() && drawable.isNotBlank()) {
+                val normalized = component.removePrefix("ComponentInfo{").removeSuffix("}")
+                mappings += normalized to drawable
+            }
+        }
+    }
+    return mappings
+}
+
+private fun readIconPackMappings(resources: android.content.res.Resources, packageName: String): List<Pair<String, String>> {
+    val xmlId = resources.getIdentifier("appfilter", "xml", packageName)
+    if (xmlId != 0) {
+        runCatching {
+            val parser = resources.getXml(xmlId)
+            try { parseIconPackFilter(parser) } finally { parser.close() }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+
+    val rawId = resources.getIdentifier("appfilter", "raw", packageName)
+    if (rawId != 0) {
+        runCatching {
+            resources.openRawResource(rawId).use { stream ->
+                val parser = Xml.newPullParser()
+                parser.setInput(stream, "UTF-8")
+                parseIconPackFilter(parser)
+            }
+        }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+
+    return runCatching {
+        resources.assets.open("appfilter.xml").buffered().use { stream ->
+            val parser = Xml.newPullParser()
+            parser.setInput(stream, "UTF-8")
+            parseIconPackFilter(parser)
+        }
+    }.getOrDefault(emptyList())
+}
+
 private fun themedAppIcon(context: Context, app: InstalledTvApp): Drawable? {
     val pack = currentIconPack(context).takeIf { it.isNotBlank() } ?: return null
     return runCatching {
-        val res = context.packageManager.getResourcesForApplication(pack)
-        val xml = res.assets.open("appfilter.xml").bufferedReader().use { it.readText() }
-        val entries = Regex("""<item\s+component="ComponentInfo\{([^}]+)}"\s+drawable="([^"]+)"\s*/>""", RegexOption.DOT_MATCHES_ALL)
-            .findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        val resources = context.packageManager.getResourcesForApplication(pack)
+        val entries = readIconPackMappings(resources, pack)
         val exact = app.packageName + "/" + app.activityName
-        val name = entries.firstOrNull { it.first == exact || it.first == "/" + app.activityName }?.second
-            ?: entries.firstOrNull { it.first.startsWith(app.packageName + "/") }?.second
+        val exactShort = app.packageName + "/" + app.activityName.removePrefix(app.packageName)
+        val name = entries.firstOrNull { it.first == exact || it.first == exactShort }?.second
+            ?: entries.firstOrNull { it.first.substringBefore("/") == app.packageName }?.second
             ?: return@runCatching null
-        val id = res.getIdentifier(name, "drawable", pack).takeIf { it != 0 } ?: res.getIdentifier(name, "mipmap", pack)
-        if (id == 0) null else res.getDrawable(id, null)
+        val id = resources.getIdentifier(name, "drawable", pack).takeIf { it != 0 }
+            ?: resources.getIdentifier(name, "mipmap", pack).takeIf { it != 0 }
+            ?: return@runCatching null
+        resources.getDrawable(id, null)
     }.getOrNull()
 }
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
@@ -339,6 +424,27 @@ private fun AmberHome() {
     val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
     val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
     var screen by remember { mutableStateOf(Screen.HOME) }
+    var homeInteractionTick by remember { mutableIntStateOf(0) }
+    var activityResumed by remember { mutableStateOf(true) }
+    val ambientAutoStartEnabled = prefs.getBoolean("ambient_auto_start_enabled", false)
+    val ambientAutoStartMinutes = prefs.getInt("ambient_auto_start_minutes", 10).coerceIn(1, 30)
+    fun startAmbient() {
+        runCatching {
+            context.startActivity(Intent(context, AmberAmbientActivity::class.java))
+            activity?.overridePendingTransition(R.anim.ambient_fade_in, R.anim.ambient_fade_out)
+        }
+    }
+    DisposableEffect(activity) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> activityResumed = true
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> activityResumed = false
+                else -> Unit
+            }
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
     var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
     val mono = iconMode != 0
     var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
@@ -392,6 +498,14 @@ private fun AmberHome() {
     BackHandler(showAddDockDialog || dockActionPackage != null || movingDockPackage != null || screen != Screen.HOME || dockWiggle) {
         when { showAddDockDialog -> showAddDockDialog = false; dockActionPackage != null -> dockActionPackage = null; movingDockPackage != null -> movingDockPackage = null; dockWiggle -> dockWiggle = false; else -> screen = if (screen == Screen.MANAGE_DOCK) Screen.SETTINGS else Screen.HOME }
     }
+    LaunchedEffect(screen, activeProfileId, ambientAutoStartEnabled, ambientAutoStartMinutes, homeInteractionTick, activityResumed, showProfiles, renameProfile, showAddDockDialog, dockActionPackage, movingDockPackage, dockWiggle) {
+        if (screen == Screen.HOME && activityResumed && ambientAutoStartEnabled &&
+            !showProfiles && renameProfile == null && !showAddDockDialog && dockActionPackage == null &&
+            movingDockPackage == null && !dockWiggle) {
+            delay(ambientAutoStartMinutes * 60_000L)
+            startAmbient()
+        }
+    }
     // Keep the Home clock live; switching back from Settings updates it immediately.
     LaunchedEffect(screen) {
         if (screen == Screen.HOME) {
@@ -434,7 +548,14 @@ private fun AmberHome() {
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f), if (themeMode == 1) Color(0xFF17232C) else Color.White, if (themeMode == 1) Color(0xFF52616A) else Color.White.copy(alpha = .58f))) {
-    Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
+    Box(
+        Modifier.fillMaxSize()
+            .background(surfaceColors[surfaceChoice])
+            .onPreviewKeyEvent { event ->
+                if (screen == Screen.HOME && event.type == KeyEventType.KeyDown) homeInteractionTick++
+                false
+            }
+    ) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
@@ -538,7 +659,7 @@ private fun AmberHome() {
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onDefaultLauncher = { screen = Screen.LAUNCHER },
                 onBack = { screen = Screen.HOME })
-            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { startAmbient() })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
                 onBack = { screen = Screen.SETTINGS },
                 onAmberTv = {
@@ -547,11 +668,14 @@ private fun AmberHome() {
                     if (request != null) runCatching { context.startActivity(request) }.onFailure { openHomeSettings(context) } else openHomeSettings(context)
                 },
                 onGoogleTv = {
-                    val googlePackage = "com.google.android.apps.tv.launcherx"
-                    val disabled = runCatching { !context.packageManager.getApplicationInfo(googlePackage, PackageManager.MATCH_DISABLED_COMPONENTS).enabled }.getOrDefault(false)
-                    if (disabled) {
-                        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$googlePackage"))) }.onFailure { openHomeSettings(context) }
-                    } else openHomeSettings(context)
+                    // The Google TV package can be enabled while its HOME activity is disabled.
+                    // Check the actual HOME activity, including disabled components, before
+                    // sending the user to Android's default-home picker.
+                    if (isGoogleTvHomeEnabled(context)) {
+                        openHomeSettings(context)
+                    } else {
+                        openGoogleTvAppSettings(context)
+                    }
                 }
             )
             Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
@@ -792,7 +916,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
-            item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
+            item { SettingsTile("Amber Ambient", "Screensaver · customize", "Slideshow, clocks, generative art, auto start", "◷", onAmbient) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
             item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
             item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
@@ -1037,7 +1161,7 @@ private fun AddDockDialog(
                 ) {
                     gridItems(apps, key = { it.packageName }) { app ->
                         val isSelected = app.packageName in selected
-                        val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
+                        val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
                         @OptIn(ExperimentalTvMaterial3Api::class)
                         TvSurface(
                             onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
@@ -1086,7 +1210,7 @@ private fun AddDockDialog(
 @Composable
 private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
     var focused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused, isMoving, itemIndex) {

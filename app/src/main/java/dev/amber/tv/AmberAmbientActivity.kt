@@ -31,12 +31,13 @@ class AmberAmbientActivity : ComponentActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) return super.onKeyDown(keyCode, event)
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE) {
             return super.onKeyDown(keyCode, event)
         }
         finish()
+        overridePendingTransition(R.anim.ambient_fade_in, R.anim.ambient_fade_out)
         return true
     }
 }
