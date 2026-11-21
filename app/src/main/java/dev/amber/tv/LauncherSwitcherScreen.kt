@@ -15,7 +15,7 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface as TvSurface
 
 @Composable
-internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, onGoogleTv: () -> Unit) {
+internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, onGoogleTv: () -> Unit, onHomeButtonHelper: () -> Unit) {
     Column(
         Modifier.fillMaxSize().background(Color(0xFF101820)).padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -30,8 +30,9 @@ internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, o
         Spacer(Modifier.height(6.dp))
         LauncherOption("Amber TV", "Make Amber TV your default Home app", "SET AMBER TV  ›", onAmberTv)
         LauncherOption("Google TV", "Switch back to the original Google TV launcher", "SET GOOGLE TV  ›", onGoogleTv)
+        LauncherOption("Home button helper", "Enable Amber TV to handle the remote Home key", "OPEN ACCESSIBILITY  ›", onHomeButtonHelper)
         Text(
-            "Android will ask you to confirm the Home app. If Google TV was disabled earlier, its App info page opens first — tap Enable, return here, then choose Google TV again.",
+            "After choosing Amber TV, enable “Amber TV Home button” in Accessibility. On some Philips firmware the Home key is routed directly to Google TV, so the helper catches it and opens Amber TV. You can turn it off here in Accessibility any time.",
             color = Color.White.copy(alpha = .52f), fontSize = 12.sp, lineHeight = 18.sp,
             modifier = Modifier.padding(top = 6.dp)
         )
