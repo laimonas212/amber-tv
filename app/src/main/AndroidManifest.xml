@@ -46,6 +46,18 @@
             android:excludeFromRecents="true"
             android:screenOrientation="landscape" />
         <service
+            android:name=".HomeButtonAccessibilityService"
+            android:exported="true"
+            android:label="Amber TV Home button"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/amber_home_accessibility" />
+        </service>
+        <service
             android:name=".AmberAmbientDreamService"
             android:exported="true"
             android:label="Amber Ambient"
