@@ -208,6 +208,34 @@ class MainActivity : ComponentActivity() {
 }
 
 
+private fun isGoogleTvHomeEnabled(context: Context): Boolean {
+    val pm = context.packageManager
+    val homeIntent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_HOME)
+        .addCategory(Intent.CATEGORY_DEFAULT)
+    val googleHome = runCatching {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DISABLED_COMPONENTS)
+            .firstOrNull { it.activityInfo?.packageName == "com.google.android.apps.tv.launcherx" }
+            ?.activityInfo
+    }.getOrNull() ?: return false
+
+    val component = android.content.ComponentName(googleHome.packageName, googleHome.name)
+    val componentState = runCatching { pm.getComponentEnabledSetting(component) }
+        .getOrDefault(PackageManager.COMPONENT_ENABLED_STATE_DEFAULT)
+    val componentDisabled = componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+        componentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+    return googleHome.enabled && googleHome.applicationInfo.enabled && !componentDisabled
+}
+
+private fun openGoogleTvAppSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        android.net.Uri.parse("package:com.google.android.apps.tv.launcherx")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }.onFailure { openHomeSettings(context) }
+}
+
 private fun openHomeSettings(context: Context) {
     val candidates = listOf(
         Intent("android.settings.HOME_SETTINGS"),
@@ -640,11 +668,14 @@ private fun AmberHome() {
                     if (request != null) runCatching { context.startActivity(request) }.onFailure { openHomeSettings(context) } else openHomeSettings(context)
                 },
                 onGoogleTv = {
-                    val googlePackage = "com.google.android.apps.tv.launcherx"
-                    val disabled = runCatching { !context.packageManager.getApplicationInfo(googlePackage, PackageManager.MATCH_DISABLED_COMPONENTS).enabled }.getOrDefault(false)
-                    if (disabled) {
-                        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$googlePackage"))) }.onFailure { openHomeSettings(context) }
-                    } else openHomeSettings(context)
+                    // The Google TV package can be enabled while its HOME activity is disabled.
+                    // Check the actual HOME activity, including disabled components, before
+                    // sending the user to Android's default-home picker.
+                    if (isGoogleTvHomeEnabled(context)) {
+                        openHomeSettings(context)
+                    } else {
+                        openGoogleTvAppSettings(context)
+                    }
                 }
             )
             Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
