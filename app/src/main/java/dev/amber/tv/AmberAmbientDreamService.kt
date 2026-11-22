@@ -13,6 +13,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.layout.ContentScale
@@ -83,6 +87,9 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val position = remember { prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4) }
     val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .80f) }
     val visualStyle = remember { prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2) }
+    val kenBurnsEnabled = remember { prefs.getBoolean("ambient_ken_burns_enabled", true) }
+    val kenBurnsSpeed = remember { prefs.getFloat("ambient_ken_burns_speed", 1f).coerceIn(.5f, 1.5f) }
+    val kenBurnsZoom = remember { prefs.getFloat("ambient_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f) }
     val wallpapers = remember {
         val localPhotos = prefs.getStringSet("ambient_photo_uris", emptySet()).orEmpty()
             .map { AmbientWallpaper(it, "Gallery photo") }
@@ -97,6 +104,14 @@ internal fun AmberAmbientContent(context: android.content.Context) {
         }.getOrDefault(emptyList())
     }
     var wallpaperIndex by remember { mutableIntStateOf(0) }
+    val kenBurnsProgress = remember { Animatable(0f) }
+    LaunchedEffect(wallpaperIndex, kenBurnsEnabled, kenBurnsSpeed, interval) {
+        kenBurnsProgress.snapTo(0f)
+        if (kenBurnsEnabled && visualStyle == 2 && wallpapers.isNotEmpty()) {
+            val duration = ((interval * 60_000L) / kenBurnsSpeed).toInt().coerceIn(20_000, 1_200_000)
+            kenBurnsProgress.animateTo(1f, animationSpec = tween(durationMillis = duration, easing = LinearEasing))
+        }
+    }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     var drift by remember { mutableIntStateOf(0) }
     var temperature by remember { mutableStateOf<Int?>(null) }
@@ -137,7 +152,20 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
         if (visualStyle == 2 && wallpapers.isNotEmpty()) {
             Crossfade(targetState = wallpaperIndex, label = "ambient-wallpaper") { index ->
-                AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                val progress = if (kenBurnsEnabled) kenBurnsProgress.value else 0f
+                val direction = if (index % 2 == 0) 1f else -1f
+                val scale = 1f + (kenBurnsZoom - 1f) * progress
+                AsyncImage(
+                    model = wallpapers[index].url,
+                    contentDescription = wallpapers[index].title,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = size.width * .012f * progress * direction
+                        translationY = -size.height * .008f * progress * direction
+                    },
+                    contentScale = ContentScale.Crop
+                )
             }
         } else if (visualStyle == 0 || visualStyle == 1) {
             val assetName = if (visualStyle == 0) "gradient_dots_background.json" else "apple_image_playground.json"
