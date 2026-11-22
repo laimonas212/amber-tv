@@ -125,6 +125,7 @@ private const val KEY_ICON_NO_BG = "icon_no_adaptive_background"
 private const val KEY_ICON_PACK = "icon_pack_package"
 private const val KEY_FONT = "font_choice"
 private const val KEY_WALLPAPER = "wallpaper_choice"
+private const val KEY_WALLPAPER_ID = "wallpaper_choice_id"
 private const val KEY_WEATHER = "show_weather"
 private const val KEY_SHOW_APP_NAMES = "show_app_names"
 private const val KEY_THEME_MODE = "theme_mode"
@@ -136,6 +137,8 @@ private data class WallpaperItem(val id: String, val title: String, val category
 private const val WALLPAPER_CATALOG_URL = "https://amberweb.lt/amber-tv/wallpapers.json"
 
 private val defaultWallpapers = emptyList<WallpaperItem>()
+
+private fun remoteWallpaperId(prefs: android.content.SharedPreferences, id: String?) { if (!id.isNullOrBlank()) prefs.edit().putString(KEY_WALLPAPER_ID, id).apply() }
 
 private fun resolveWallpaperAsset(rawPath: String, folder: String): String? {
     val value = rawPath.trim()
@@ -349,7 +352,12 @@ private fun AmberHome() {
     var wallpaperItems by remember {
         mutableStateOf(runCatching { parseWallpaperCatalog(prefs.getString(KEY_WALLPAPER_CACHE, null).orEmpty()) }.getOrDefault(emptyList()))
     }
-    var wallpaperChoice by remember { mutableIntStateOf(prefs.getInt(KEY_WALLPAPER, 0).coerceAtLeast(0)) }
+    var wallpaperChoice by remember {
+        mutableIntStateOf(
+            wallpaperItems.indexOfFirst { it.id == prefs.getString(KEY_WALLPAPER_ID, null) }
+                .takeIf { it >= 0 } ?: prefs.getInt(KEY_WALLPAPER, 0).coerceAtLeast(0)
+        )
+    }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
     var dockWiggle by remember { mutableStateOf(false) }
@@ -420,7 +428,8 @@ private fun AmberHome() {
             val remote = fetchRemoteWallpapers()
             if (remote.isNotEmpty()) {
                 wallpaperItems = remote
-                wallpaperChoice = prefs.getInt(KEY_WALLPAPER, 0).coerceIn(remote.indices)
+                wallpaperChoice = remote.indexOfFirst { it.id == prefs.getString(KEY_WALLPAPER_ID, null) }
+                    .takeIf { it >= 0 } ?: prefs.getInt(KEY_WALLPAPER, 0).coerceIn(remote.indices)
                 prefs.edit().putString(KEY_WALLPAPER_CACHE, JSONObject().put("wallpapers", org.json.JSONArray().apply {
                     remote.forEach { item ->
                         put(JSONObject().put("id", item.id).put("title", item.title).put("category", item.category)
@@ -522,15 +531,15 @@ private fun AmberHome() {
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 themeMode = themeMode, accentChoice = accentChoice, surfaceChoice = surfaceChoice,
-                onTheme = { themeMode = (themeMode + 1) % 2; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
-                onAccent = { accentChoice = (accentChoice + 1) % 11; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
-                onSurface = { surfaceChoice = (surfaceChoice + 1) % 10; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
-                onIconMode = { iconMode = (iconMode + 1) % 3; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
+                onTheme = { themeMode = it; prefs.edit().putInt(KEY_THEME_MODE, themeMode).apply() },
+                onAccent = { accentChoice = it; prefs.edit().putInt(KEY_ACCENT, accentChoice).apply() },
+                onSurface = { surfaceChoice = it; prefs.edit().putInt(KEY_SURFACE, surfaceChoice).apply() },
+                onIconMode = { iconMode = it; prefs.edit().putInt(KEY_ICON_MODE, iconMode).putBoolean(KEY_MONO, iconMode != 0).apply() },
                 onIconBackground = { removeIconBackground = it; prefs.edit().putBoolean(KEY_ICON_NO_BG, it).apply() },
                 iconPackName = installedIconPacks.firstOrNull { it.packageName == iconPackPackage }?.label ?: if (iconPackPackage.isBlank()) "Default icons" else "Unavailable",
                 onIconPack = { showIconPackPicker = true },
                 onShowAppNames = { showAppNames = it; prefs.edit().putBoolean(KEY_SHOW_APP_NAMES, it).apply() },
-                onFont = { fontChoice = (fontChoice + 1) % 3; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
+                onFont = { fontChoice = it; prefs.edit().putInt(KEY_FONT, fontChoice).apply() },
                 onWallpaper = { screen = Screen.WALLPAPERS },
                 showWeather = showWeather,
                 onWeather = { showWeather = it; prefs.edit().putBoolean(KEY_WEATHER, it).apply() },
@@ -557,7 +566,11 @@ private fun AmberHome() {
                     runCatching { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 }
             )
-            Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index -> wallpaperChoice = index; prefs.edit().putInt(KEY_WALLPAPER, index).commit() }, onBack = { screen = Screen.SETTINGS }) else {
+            Screen.WALLPAPERS -> if (wallpaperItems.isNotEmpty()) WallpaperLibraryScreen(wallpaperItems, wallpaperChoice.coerceIn(wallpaperItems.indices), dock.mapNotNull { p -> apps.find { it.packageName == p } }, mono, font, onSelect = { index ->
+                    wallpaperChoice = index
+                    remoteWallpaperId(prefs, wallpaperItems.getOrNull(index)?.id)
+                    prefs.edit().putInt(KEY_WALLPAPER, index).commit()
+                }, onBack = { screen = Screen.SETTINGS }) else {
                 Box(Modifier.fillMaxSize().background(Color(0xE9121B22)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text("Wallpaper library is temporarily unavailable", color = Color.White, fontSize = 20.sp)
@@ -784,24 +797,56 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: () -> Unit, onAccent: () -> Unit, onSurface: () -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: () -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: () -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, onBack: () -> Unit) {
+    var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
         Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
         LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈", onIconMode) }
+            item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈") { choiceDialog = SettingsChoice("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus"), iconMode, onIconMode) } }
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
-            item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa", onFont) }
+            item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
             item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
-            item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onTheme) }
-            item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦", onAccent) }
-            item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧", onSurface) }
+            item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐") { choiceDialog = SettingsChoice("Theme", listOf("Dark", "Light"), themeMode, onTheme) } }
+            item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦") { choiceDialog = SettingsChoice("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage"), accentChoice, onAccent) } }
+            item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧") { choiceDialog = SettingsChoice("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage"), surfaceChoice, onSurface) } }
             item { SettingsTile("Default launcher", "Choose Amber TV or Google TV", "Change which Home app opens when you press Home", "⌂", onDefaultLauncher) }
             item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
+        }
+    }
+    choiceDialog?.let { choice ->
+        SettingsChoiceDialog(choice.title, choice.options, choice.selected, onSelect = { choice.onSelect(it); choiceDialog = null }, onClose = { choiceDialog = null })
+    }
+}
+
+private data class SettingsChoice(val title: String, val options: List<String>, val selected: Int, val onSelect: (Int) -> Unit)
+
+@Composable
+private fun SettingsChoiceDialog(title: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose) {
+        Column(Modifier.width(560.dp).heightIn(max = 620.dp).clip(RoundedCornerShape(26.dp))
+            .background(Color(0xF21A242C)).border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(26.dp))
+            .padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+            Text("Choose an option", color = Color.White.copy(alpha = .62f), fontSize = 14.sp)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                items(options.size) { index ->
+                    val active = index == selected
+                    TvSurface(onClick = { onSelect(index) }, modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (active) Color(0x553D7890) else Color(0x22FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus)) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 17.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(options[index], color = Color.White, fontSize = 16.sp)
+                            Spacer(Modifier.weight(1f))
+                            if (active) Text("✓  SELECTED", color = LocalAmberPalette.current.accent, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }
