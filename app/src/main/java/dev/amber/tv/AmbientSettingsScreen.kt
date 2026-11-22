@@ -1,6 +1,9 @@
 package dev.amber.tv
 
 import android.content.SharedPreferences
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -28,6 +31,7 @@ private val ambientVisualStyles = listOf("Gradient Dots", "Apple Image Playgroun
 
 @Composable
 internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit, onStartNow: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showClock by remember { mutableStateOf(prefs.getBoolean("ambient_show_clock", true)) }
     var showDate by remember { mutableStateOf(prefs.getBoolean("ambient_show_date", true)) }
     var showWeather by remember { mutableStateOf(prefs.getBoolean("ambient_show_weather", false)) }
@@ -36,6 +40,21 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
     var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f)) }
     var visualStyle by remember { mutableIntStateOf(prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2)) }
+    var selectedPhotos by remember { mutableStateOf(prefs.getStringSet("ambient_photo_uris", emptySet())?.toList().orEmpty()) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) {
+            val retained = uris.mapNotNull { uri ->
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    uri.toString()
+                }.getOrNull()
+            }
+            if (retained.isNotEmpty()) {
+                selectedPhotos = retained
+                prefs.edit().putStringSet("ambient_photo_uris", retained.toSet()).apply()
+            }
+        }
+    }
     fun save(key: String, value: Any) {
         prefs.edit().apply {
             when (value) {
@@ -80,23 +99,49 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             item { AmbientToggle("24-hour clock", "Use 16:45 instead of 4:45 PM", use24Hour) { use24Hour = it; save("ambient_24_hour", it) } }
             item { AmbientChoice("Photo rotation interval", "Change photo every $interval minute(s)", ambientIntervals.map { "$it min" }, ambientIntervals.indexOf(interval).coerceAtLeast(0)) { interval = ambientIntervals[it]; save("ambient_interval_minutes", interval) } }
             item { AmbientChoice("Clock position", ambientPositions[position], ambientPositions, position) { position = it; save("ambient_clock_position", it) } }
+            if (visualStyle == 2) {
+                item {
+                    AmbientAction("Choose photos from gallery", "${selectedPhotos.size} selected · only these photos will be shown", "SELECT  ›") {
+                        photoPicker.launch(arrayOf("image/*"))
+                    }
+                }
+                if (selectedPhotos.isNotEmpty()) {
+                    item { AmbientAction("Clear selected photos", "Return to the online wallpaper collection", "CLEAR  ×") {
+                        selectedPhotos = emptyList()
+                        prefs.edit().remove("ambient_photo_uris").apply()
+                    } }
+                }
+            }
             item {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0x33202B35)).padding(horizontal = 20.dp, vertical = 14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("OLED dimming", color = Color.White, fontSize = 17.sp)
-                            Text("Darken the image to reduce static brightness", color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
+                            Text("Darkens photos and both Lottie animations in real time", color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
                         }
                         Text("${(dim * 100).toInt()}%", color = Color(0xFFB9D9F3), fontSize = 16.sp)
                     }
-                    Slider(value = dim, onValueChange = { dim = it }, onValueChangeFinished = { save("ambient_dim", dim) }, valueRange = 0f..0.65f)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AmbientStepButton("−") { dim = (dim - .05f).coerceAtLeast(0f); save("ambient_dim", dim) }
+                        Slider(modifier = Modifier.weight(1f), value = dim, onValueChange = { dim = it; save("ambient_dim", it) }, valueRange = 0f..0.80f)
+                        AmbientStepButton("+") { dim = (dim + .05f).coerceAtMost(.80f); save("ambient_dim", dim) }
+                    }
                 }
             }
             item { AmbientAction("Start Amber Ambient now", "Launch the full-screen Ambient display immediately", "START NOW  ›", onStartNow) }
-            item { Text("SYSTEM", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
-            item { AmbientAction("Android screensaver settings", "Select Amber Ambient and set idle timeout", "OPEN SETTINGS  ›", onOpenSystemSettings) }
-            item { Text("The idle timeout is controlled by the TV system. Amber Ambient must be selected once in Android Settings.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
+            item { Text("START DELAY", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
+            item { AmbientAction("When should screensaver start?", "Set the idle timeout in Android TV system settings", "SET DELAY  ›", onOpenSystemSettings) }
+            item { Text("Android TV controls the actual idle delay. This opens the system page where you can choose after how long Amber Ambient starts.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
         }
+    }
+}
+
+@Composable
+private fun AmbientStepButton(label: String, onClick: () -> Unit) {
+    TvSurface(onClick = onClick, modifier = Modifier.size(48.dp),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x33202B35), focusedContainerColor = Color(0x66517FA0))) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(label, color = Color.White, fontSize = 25.sp) }
     }
 }
 
