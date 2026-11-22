@@ -367,7 +367,7 @@ private fun AmberHome() {
     }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
-    var dockBlurLevel by remember { mutableIntStateOf(prefs.getInt("dock_background_blur_level", 0).coerceIn(0, 3)) }
+    var dockBlurLevel by remember { mutableIntStateOf(prefs.getInt("dock_background_blur_level", 0).coerceIn(0, 15)) }
     var dockWiggle by remember { mutableStateOf(false) }
     var dockActionPackage by remember { mutableStateOf<String?>(null) }
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
@@ -487,7 +487,7 @@ private fun AmberHome() {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
                         // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
-                        val dockBlurRadius = when (dockBlurLevel) { 1 -> 8; 2 -> 18; 3 -> 30; else -> 0 }
+                        val dockBlurRadius = dockBlurLevel
                         if (dockBlurRadius > 0) {
                             wallpaperItems.getOrNull(wallpaperChoice)?.let { selectedWallpaper ->
                                 AsyncImage(model = selectedWallpaper.url, contentDescription = null, contentScale = ContentScale.Crop,
@@ -500,13 +500,13 @@ private fun AmberHome() {
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            LocalAmberPalette.current.accent.copy(alpha = if (dockBlurRadius > 0) .10f else .13f),
+                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .48f else .58f),
                                             LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .48f else .62f),
                                             LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .68f else .84f)
                                         )
                                     )
                                 )
-                                .border(1.dp, LocalAmberPalette.current.accent.copy(alpha = .30f), dockShape)
+                                .border(1.dp, Color.White.copy(alpha = .18f), dockShape)
                         )
                         LazyRow(
                             state = dockListState,
@@ -575,7 +575,7 @@ private fun AmberHome() {
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onDefaultLauncher = { screen = Screen.LAUNCHER },
                 dockBlurLevel = dockBlurLevel,
-                onDockBlur = { level -> dockBlurLevel = level.coerceIn(0, 3); prefs.edit().putInt("dock_background_blur_level", dockBlurLevel).apply() },
+                onDockBlur = { level -> dockBlurLevel = level.coerceIn(0, 15); prefs.edit().putInt("dock_background_blur_level", dockBlurLevel).apply() },
                 onBack = { screen = Screen.HOME })
             Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
@@ -843,7 +843,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
-            item { SettingsTile("Dock background blur", listOf("Off", "Subtle · 8 dp", "Medium · 18 dp", "Strong · 30 dp")[dockBlurLevel.coerceIn(0, 3)], "Choose blur strength behind the Dock", "◫") { choiceDialog = SettingsChoice("Dock background blur", listOf("Off", "Subtle · 8 dp", "Medium · 18 dp", "Strong · 30 dp"), dockBlurLevel, onDockBlur) } }
+            item { SettingsTile("Dock background blur", "$dockBlurLevel px", "Adjust background blur from 0 to 15 px", "◫") { choiceDialog = SettingsChoice("Dock background blur", (0..15).map { "$it px" }, dockBlurLevel, onDockBlur) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
