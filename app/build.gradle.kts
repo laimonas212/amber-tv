@@ -38,5 +38,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.tv:tv-material:1.0.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.airbnb.android:lottie-compose:6.6.7")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
