@@ -486,26 +486,21 @@ private fun AmberHome() {
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
+                        // Dock stays a translucent glass surface; blur never paints the selected wallpaper into it.
                         val dockBlurRadius = dockBlurLevel
-                        if (dockBlurRadius > 0) {
-                            wallpaperItems.getOrNull(wallpaperChoice)?.let { selectedWallpaper ->
-                                AsyncImage(model = selectedWallpaper.url, contentDescription = null, contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize().blur(dockBlurRadius.dp))
-                            }
-                        }
                         Box(
                             Modifier.fillMaxSize()
                                 .clip(dockShape)
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .48f else .58f),
-                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .48f else .62f),
-                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurRadius > 0) .68f else .84f)
+                                            LocalAmberPalette.current.surface.copy(alpha = .58f),
+                                            LocalAmberPalette.current.surface.copy(alpha = .62f),
+                                            LocalAmberPalette.current.surface.copy(alpha = .84f)
                                         )
                                     )
                                 )
+                                .then(if (dockBlurRadius > 0) Modifier.blur(dockBlurRadius.dp) else Modifier)
                                 .border(1.dp, Color.White.copy(alpha = .18f), dockShape)
                         )
                         LazyRow(
