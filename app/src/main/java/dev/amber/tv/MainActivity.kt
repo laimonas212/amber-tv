@@ -40,7 +40,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme as Material3Theme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -451,7 +457,15 @@ private fun AmberHome() {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
-        when (screen) {
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                (fadeIn(tween(240, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { it / 22 }) togetherWith
+                    (fadeOut(tween(150)) + slideOutHorizontally(tween(190)) { -it / 28 })
+            },
+            label = "amber-screen-transition"
+        ) { activeScreen ->
+        when (activeScreen) {
             Screen.HOME -> {
                 Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -587,6 +601,7 @@ private fun AmberHome() {
             Screen.MANAGE_DOCK -> ManageDockScreen(apps, dock, iconMode, removeIconBackground, font, { screen = Screen.SETTINGS },
                 { app -> saveDock(if (app.packageName in dock) dock - app.packageName else dock + app.packageName) },
                 { index, delta -> val target = index + delta; if (target in dock.indices) { val next = dock.toMutableList(); val item = next.removeAt(index); next.add(target, item); saveDock(next) } })
+        }
         }
         if (dockActionPackage != null) {
             val selectedApp = apps.firstOrNull { it.packageName == dockActionPackage }
