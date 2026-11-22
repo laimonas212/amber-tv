@@ -38,7 +38,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var use24Hour by remember { mutableStateOf(prefs.getBoolean("ambient_24_hour", true)) }
     var interval by remember { mutableIntStateOf(prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10)) }
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
-    var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f)) }
+    var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .80f)) }
     var visualStyle by remember { mutableIntStateOf(prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2)) }
     var selectedPhotos by remember { mutableStateOf(prefs.getStringSet("ambient_photo_uris", emptySet())?.toList().orEmpty()) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
