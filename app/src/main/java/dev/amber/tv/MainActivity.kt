@@ -485,15 +485,22 @@ private fun AmberHome() {
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
                         // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
+                        val dockBlurEnabled = prefs.getBoolean("dock_background_blur", false)
+                        if (dockBlurEnabled) {
+                            wallpaperItems.getOrNull(wallpaperChoice)?.let { selectedWallpaper ->
+                                AsyncImage(model = selectedWallpaper.url, contentDescription = null, contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize().blur(28.dp))
+                            }
+                        }
                         Box(
                             Modifier.fillMaxSize()
                                 .clip(dockShape)
                                 .background(
                                     Brush.verticalGradient(
                                         listOf(
-                                            LocalAmberPalette.current.accent.copy(alpha = .13f),
-                                            LocalAmberPalette.current.surface.copy(alpha = .62f),
-                                            LocalAmberPalette.current.surface.copy(alpha = .84f)
+                                            LocalAmberPalette.current.accent.copy(alpha = if (dockBlurEnabled) .10f else .13f),
+                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurEnabled) .48f else .62f),
+                                            LocalAmberPalette.current.surface.copy(alpha = if (dockBlurEnabled) .68f else .84f)
                                         )
                                     )
                                 )
@@ -564,6 +571,8 @@ private fun AmberHome() {
                 onAmbient = { screen = Screen.AMBIENT },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onDefaultLauncher = { screen = Screen.LAUNCHER },
+                dockBlurEnabled = prefs.getBoolean("dock_background_blur", false),
+                onDockBlur = { prefs.edit().putBoolean("dock_background_blur", it).apply() },
                 onBack = { screen = Screen.HOME })
             Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
@@ -821,7 +830,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, dockBlurEnabled: Boolean, onDockBlur: (Boolean) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
@@ -831,6 +840,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
+            item { SettingsTile("Dock background blur", if (dockBlurEnabled) "Blurred glass" else "Current appearance", "Apply a soft blur behind the Dock", "◫") { onDockBlur(!dockBlurEnabled) } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
@@ -857,6 +867,9 @@ private fun SettingsChoiceDialog(title: String, options: List<String>, selected:
             .padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
             Text("Choose an option", color = Color.White.copy(alpha = .62f), fontSize = 14.sp)
+            val accentSwatches = listOf(Color(0xFF78B7FF),Color(0xFFB69CFF),Color(0xFF72D6C1),Color(0xFFFFB86B),Color(0xFFFF82A8),Color(0xFFD0D5DA),Color(0xFFFFA6C9),Color(0xFFFFD166),Color(0xFFFF9B85),Color(0xFFC5A3FF),Color(0xFFA8D98B))
+            val surfaceSwatches = listOf(Color(0xFF17232C),Color(0xFF101820),Color(0xFF25212F),Color(0xFF202A24),Color(0xFF282828),Color(0xFF352432),Color(0xFF382F1D),Color(0xFF3A2925),Color(0xFF29233A),Color(0xFF263329))
+            val swatches = when (title) { "Accent colour" -> accentSwatches; "Glass tint" -> surfaceSwatches; else -> emptyList() }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(options.size) { index ->
                     val active = index == selected
@@ -864,7 +877,8 @@ private fun SettingsChoiceDialog(title: String, options: List<String>, selected:
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
                         colors = ClickableSurfaceDefaults.colors(containerColor = if (active) Color(0x553D7890) else Color(0x22FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus)) {
                         Row(Modifier.fillMaxSize().padding(horizontal = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(options[index], color = Color.White, fontSize = 16.sp)
+                            if (index < swatches.size) Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(swatches[index]).border(1.dp, Color.White.copy(alpha = .28f), RoundedCornerShape(7.dp)))
+                            Text(options[index], Modifier.padding(start = if (index < swatches.size) 13.dp else 0.dp), color = Color.White, fontSize = 16.sp)
                             Spacer(Modifier.weight(1f))
                             if (active) Text("✓  SELECTED", color = LocalAmberPalette.current.accent, fontSize = 10.sp)
                         }
