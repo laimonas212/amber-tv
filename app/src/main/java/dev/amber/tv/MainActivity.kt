@@ -459,7 +459,6 @@ private fun AmberHome() {
             AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         AnimatedContent(
-            modifier = Modifier.fillMaxSize(),
             targetState = screen,
             transitionSpec = {
                 (fadeIn(tween(240, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { it / 22 }) togetherWith
@@ -484,8 +483,8 @@ private fun AmberHome() {
                     }
                 }
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
-                    val dockShape = RoundedCornerShape(28.dp)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).widthIn(max = 1240.dp).padding(bottom = 34.dp).height(120.dp).clip(dockShape)) {
+                    val dockShape = RoundedCornerShape(36.dp)
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
                         // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
                         val dockBlurRadius = when (dockBlurLevel) { 1 -> 8; 2 -> 18; 3 -> 30; else -> 0 }
                         if (dockBlurRadius > 0) {
