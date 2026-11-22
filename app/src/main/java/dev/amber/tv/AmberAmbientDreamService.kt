@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.blur
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.LottieCompositionSpec
@@ -83,7 +84,9 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f) }
     val visualStyle = remember { prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2) }
     val wallpapers = remember {
-        runCatching {
+        val localPhotos = prefs.getStringSet("ambient_photo_uris", emptySet()).orEmpty()
+            .map { AmbientWallpaper(it, "Gallery photo") }
+        if (localPhotos.isNotEmpty()) localPhotos else runCatching {
             val raw = prefs.getString("remote_wallpaper_catalog", null) ?: return@runCatching emptyList()
             val array = JSONObject(raw).getJSONArray("wallpapers")
             (0 until array.length()).mapNotNull { i ->
@@ -140,7 +143,8 @@ internal fun AmberAmbientContent(context: android.content.Context) {
             val assetName = if (visualStyle == 0) "gradient_dots_background.json" else "apple_image_playground.json"
             val composition by rememberLottieComposition(LottieCompositionSpec.Asset(assetName))
             LottieAnimation(composition = composition, iterations = LottieConstants.IterateForever,
-                modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                modifier = Modifier.fillMaxSize().then(if (visualStyle == 1) Modifier.blur(18.dp) else Modifier),
+                contentScale = ContentScale.FillBounds)
         } else {
             Box(Modifier.fillMaxSize().background(Color(0xFF080B10)))
         }
