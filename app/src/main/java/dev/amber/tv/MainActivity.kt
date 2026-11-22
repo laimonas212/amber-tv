@@ -367,7 +367,9 @@ private fun AmberHome() {
     }
     var showWeather by remember { mutableStateOf(prefs.getBoolean(KEY_WEATHER, false)) }
     var showAppNames by remember { mutableStateOf(prefs.getBoolean(KEY_SHOW_APP_NAMES, true)) }
-    var dockBlurLevel by remember { mutableIntStateOf(prefs.getInt("dock_background_blur_level", 0).coerceIn(0, 15)) }
+    var desktopKenBurns by remember { mutableStateOf(prefs.getBoolean("desktop_ken_burns_enabled", false)) }
+    var desktopKenBurnsSpeed by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_speed", 1f).coerceIn(.5f, 1.5f)) }
+    var desktopKenBurnsZoom by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f)) }
     var dockWiggle by remember { mutableStateOf(false) }
     var dockActionPackage by remember { mutableStateOf<String?>(null) }
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
@@ -454,9 +456,16 @@ private fun AmberHome() {
     val font = when (fontChoice) { 1 -> FontFamily.Serif; 2 -> FontFamily.Monospace; else -> FontFamily.SansSerif }
 
     CompositionLocalProvider(LocalAmberPalette provides AmberPalette(glassSurface, glassFocus, accentColors[accentChoice], if (themeMode == 1) Color.White.copy(alpha = .9f) else Color.White.copy(alpha = .38f), if (themeMode == 1) Color(0xFF17232C) else Color.White, if (themeMode == 1) Color(0xFF52616A) else Color.White.copy(alpha = .58f))) {
+    val desktopMotion = rememberInfiniteTransition(label = "desktop-wallpaper-motion")
+    val desktopMotionProgress by desktopMotion.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(animation = tween(durationMillis = (45_000f / desktopKenBurnsSpeed).toInt().coerceIn(20_000, 120_000), easing = androidx.compose.animation.core.LinearEasing), repeatMode = RepeatMode.Reverse), label = "desktop-wallpaper-progress")
     Box(Modifier.fillMaxSize().background(surfaceColors[surfaceChoice])) {
         wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
-            AsyncImage(wallpaper.url, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            AsyncImage(wallpaper.url, null, Modifier.fillMaxSize().graphicsLayer {
+                val scale = if (desktopKenBurns) 1f + (desktopKenBurnsZoom - 1f) * desktopMotionProgress else 1f
+                scaleX = scale; scaleY = scale
+                translationX = if (desktopKenBurns) size.width * .006f * desktopMotionProgress else 0f
+                translationY = if (desktopKenBurns) -size.height * .004f * desktopMotionProgress else 0f
+            }, contentScale = ContentScale.Crop)
         }
         AnimatedContent(
             targetState = screen,
@@ -486,18 +495,7 @@ private fun AmberHome() {
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        // Frosted-glass backdrop: render the same wallpaper under the Dock, blur it, then tint it.
-                        val dockBlurRadius = dockBlurLevel
-                        if (dockBlurRadius > 0) {
-                            wallpaperItems.getOrNull(wallpaperChoice)?.let { wallpaper ->
-                                AsyncImage(
-                                    model = wallpaper.url,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize().blur(dockBlurRadius.dp)
-                                )
-                            }
-                        }
+                        // Translucent frosted-glass Dock surface; no duplicate wallpaper layer.
                         Box(
                             Modifier.fillMaxSize()
                                 .clip(dockShape)
@@ -578,8 +576,12 @@ private fun AmberHome() {
                 onAmbient = { screen = Screen.AMBIENT },
                 onSystem = { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                 onDefaultLauncher = { screen = Screen.LAUNCHER },
-                dockBlurLevel = dockBlurLevel,
-                onDockBlur = { level -> dockBlurLevel = level.coerceIn(0, 15); prefs.edit().putInt("dock_background_blur_level", dockBlurLevel).apply() },
+                desktopKenBurns = desktopKenBurns,
+                desktopKenBurnsSpeed = desktopKenBurnsSpeed,
+                desktopKenBurnsZoom = desktopKenBurnsZoom,
+                onDesktopKenBurns = { enabled -> desktopKenBurns = enabled; prefs.edit().putBoolean("desktop_ken_burns_enabled", enabled).apply() },
+                onDesktopKenBurnsSpeed = { speed -> desktopKenBurnsSpeed = speed; prefs.edit().putFloat("desktop_ken_burns_speed", speed).apply() },
+                onDesktopKenBurnsZoom = { zoom -> desktopKenBurnsZoom = zoom; prefs.edit().putFloat("desktop_ken_burns_zoom", zoom).apply() },
                 onBack = { screen = Screen.HOME })
             Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
@@ -837,7 +839,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, dockBlurLevel: Int, onDockBlur: (Int) -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
@@ -847,7 +849,11 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
             item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
             item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
             item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
-            item { SettingsTile("Dock background blur", "$dockBlurLevel px", "Adjust background blur from 0 to 15 px", "◫") { choiceDialog = SettingsChoice("Dock background blur", (0..15).map { "$it px" }, dockBlurLevel, onDockBlur) } }
+            item { SettingsTile("Desktop Ken Burns", if (desktopKenBurns) "On · slow wallpaper motion" else "Off", "Subtle zoom and pan on the Home background", "◫") { onDesktopKenBurns(!desktopKenBurns) } }
+            if (desktopKenBurns) {
+                item { SettingsTile("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×")[listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)], "Choose how quickly the wallpaper moves", "↗") { choiceDialog = SettingsChoice("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×"), listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)) { onDesktopKenBurnsSpeed(listOf(.5f,.75f,1f,1.25f,1.5f)[it]) } } }
+                item { SettingsTile("Desktop zoom", "${((desktopKenBurnsZoom - 1f) * 100).toInt()}%", "Choose the amount of zoom", "⊕") { choiceDialog = SettingsChoice("Desktop zoom", listOf("2%","4%","6%","8%","10%","12%","15%"), listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f).indexOf(desktopKenBurnsZoom).coerceAtLeast(0)) { onDesktopKenBurnsZoom(listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f)[it]) } } }
+            }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
