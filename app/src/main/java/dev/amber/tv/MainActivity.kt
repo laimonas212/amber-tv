@@ -484,8 +484,8 @@ private fun AmberHome() {
                     }
                 }
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
-                    val dockShape = RoundedCornerShape(36.dp)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
+                    val dockShape = RoundedCornerShape(28.dp)
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth(0.86f).widthIn(max = 1240.dp).padding(bottom = 34.dp).height(120.dp).clip(dockShape)) {
                         // Clean glass surface: translucent neutral tint only, never a blurred wallpaper duplicate.
                         val dockBlurRadius = when (dockBlurLevel) { 1 -> 8; 2 -> 18; 3 -> 30; else -> 0 }
                         if (dockBlurRadius > 0) {
@@ -510,13 +510,13 @@ private fun AmberHome() {
                         )
                         LazyRow(
                             state = dockListState,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 6.dp)
                                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                                 .drawWithContent {
                                     drawContent()
                                     drawRect(brush = Brush.horizontalGradient(0f to Color.Transparent, 0.10f to Color.White, 0.90f to Color.White, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                                 },
-                            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically
                         ) {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
@@ -1039,7 +1039,7 @@ private fun SmallAction(label: String, enabled: Boolean, onClick: () -> Unit) {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun AddDockButton(onClick: () -> Unit) {
-    TvSurface(onClick, Modifier.size(92.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+    TvSurface(onClick, Modifier.size(76.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1184,7 +1184,7 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var longPressTriggered by remember { mutableStateOf(false) }
     var suppressNextOkKeyUp by remember { mutableStateOf(false) }
-    Box(Modifier.width(160.dp).height(124.dp), contentAlignment = Alignment.TopEnd) {
+    Box(Modifier.width(132.dp).height(108.dp), contentAlignment = Alignment.TopEnd) {
         TvSurface({
             // OK is handled entirely in onPreviewKeyEvent to avoid a second click on key release.
         }, Modifier.fillMaxSize().bringIntoViewRequester(bringIntoViewRequester).onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
@@ -1233,11 +1233,11 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
             ),
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = if (showAppNames) 10.dp else 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Image(bitmap, app.label, Modifier.size(if (showAppNames) 58.dp else 88.dp).clip(RoundedCornerShape(if (removeIconBackground) 18.dp else if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
+                Image(bitmap, app.label, Modifier.size(if (showAppNames) 52.dp else 76.dp).clip(RoundedCornerShape(if (removeIconBackground) 18.dp else if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
                     colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
                 if (showAppNames) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
+                    Spacer(Modifier.height(6.dp))
+                    Text(app.label, color = Color.White.copy(alpha = .96f), fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, fontFamily = font)
                 }
             }
         }
