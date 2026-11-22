@@ -468,6 +468,7 @@ private fun AmberHome() {
         ) { activeScreen ->
         when (activeScreen) {
             Screen.HOME -> {
+                Box(Modifier.fillMaxSize()) {
                 Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
@@ -554,6 +555,7 @@ private fun AmberHome() {
                             }
                         }
                     }
+                }
             }
             Screen.SETTINGS -> SettingsScreen(iconMode, removeIconBackground, fontChoice, wallpaperChoice, wallpaperItems.size, showAppNames,
                 themeMode = themeMode, accentChoice = accentChoice, surfaceChoice = surfaceChoice,
