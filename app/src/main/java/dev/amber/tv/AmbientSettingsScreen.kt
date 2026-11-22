@@ -24,7 +24,7 @@ import androidx.tv.material3.Surface as TvSurface
 
 private val ambientIntervals = listOf(1, 2, 5, 10)
 private val ambientPositions = listOf("Bottom left", "Bottom right", "Top left", "Top right", "Center")
-private val ambientVisualStyles = listOf("Aurora", "Ocean glow", "Deep nebula", "Solar drift", "Photo slideshow")
+private val ambientVisualStyles = listOf("Photo slideshow")
 
 @Composable
 internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit, onStartNow: () -> Unit) {
@@ -35,7 +35,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var interval by remember { mutableIntStateOf(prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10)) }
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
     var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f)) }
-    var visualStyle by remember { mutableIntStateOf(prefs.getInt("ambient_visual_style", 0).coerceIn(0, 4)) }
+    var visualStyle by remember { mutableIntStateOf(4) }
     fun save(key: String, value: Any) {
         prefs.edit().apply {
             when (value) {
@@ -64,16 +64,10 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             item {
                 AmbientChoice(
                     "Ambient style",
-                    when (visualStyle) {
-                        1 -> "Ocean glow · flowing blue light"
-                        2 -> "Deep nebula · violet cosmic haze"
-                        3 -> "Solar drift · warm golden light"
-                        4 -> "Photo slideshow · wallpaper collection"
-                        else -> "Aurora · northern lights"
-                    },
+                    "Use your selected wallpaper collection",
                     ambientVisualStyles,
-                    visualStyle
-                ) { visualStyle = it; save("ambient_visual_style", it) }
+                    0
+                ) { visualStyle = 4; save("ambient_visual_style", 4) }
             }
             item { Text("DISPLAY", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
             item { AmbientToggle("Clock", "Show a large cinematic clock", showClock) { showClock = it; save("ambient_show_clock", it) } }
