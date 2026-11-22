@@ -77,7 +77,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val interval = remember { prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10) }
     val position = remember { prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4) }
     val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f) }
-    val visualStyle = remember { prefs.getInt("ambient_visual_style", 0).coerceIn(0, 4) }
+    val visualStyle = remember { prefs.getInt("ambient_visual_style", 4).coerceIn(0, 4) }
     val wallpapers = remember {
         runCatching {
             val raw = prefs.getString("remote_wallpaper_catalog", null) ?: return@runCatching emptyList()
@@ -133,7 +133,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
                 AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
         } else {
-            AndroidView(factory = { AuroraAmbientView(it, visualStyle) }, modifier = Modifier.fillMaxSize(), update = { })
+            Box(Modifier.fillMaxSize().background(Color(0xFF080B10)))
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         Box(Modifier.fillMaxSize().padding(horizontal = 88.dp, vertical = 64.dp), contentAlignment = align) {
