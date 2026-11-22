@@ -3,6 +3,11 @@ package dev.amber.tv
 import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
@@ -97,7 +102,8 @@ private fun AmbientToggle(title: String, hint: String, checked: Boolean, onClick
 
 @Composable
 private fun AmbientChoice(title: String, value: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    TvSurface(onClick = { onSelect((selected + 1) % options.size) }, modifier = Modifier.fillMaxWidth().height(68.dp),
+    var expanded by remember { mutableStateOf(false) }
+    TvSurface(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().height(68.dp),
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x33202B35), focusedContainerColor = Color(0x66517FA0))) {
         Row(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -105,7 +111,27 @@ private fun AmbientChoice(title: String, value: String, options: List<String>, s
                 Text(title, color = Color.White, fontSize = 16.sp)
                 Text(value, color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
             }
-            Text("CHANGE  ›", color = Color(0xFF9FD5FF), fontSize = 11.sp)
+            Text("CHOOSE  ▾", color = Color(0xFF9FD5FF), fontSize = 11.sp)
+        }
+    }
+    AnimatedVisibility(visible = expanded, enter = fadeIn(), exit = fadeOut()) {
+        Dialog(onDismissRequest = { expanded = false }) {
+            Column(Modifier.width(500.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xF21A242C))
+                .padding(22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, color = Color.White, fontSize = 23.sp)
+                Text("Choose an option", color = Color.White.copy(alpha = .62f), fontSize = 13.sp)
+                options.forEachIndexed { index, option ->
+                    TvSurface(onClick = { onSelect(index); expanded = false }, modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
+                        colors = ClickableSurfaceDefaults.colors(containerColor = if (index == selected) Color(0x553D7890) else Color(0x22FFFFFF), focusedContainerColor = Color(0x66517FA0))) {
+                        Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(option, color = Color.White, fontSize = 16.sp)
+                            Spacer(Modifier.weight(1f))
+                            if (index == selected) Text("✓  SELECTED", color = Color(0xFF9FD5FF), fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }
