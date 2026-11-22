@@ -40,6 +40,9 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
     var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .80f)) }
     var visualStyle by remember { mutableIntStateOf(prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2)) }
+    var kenBurnsEnabled by remember { mutableStateOf(prefs.getBoolean("ambient_ken_burns_enabled", true)) }
+    var kenBurnsSpeed by remember { mutableFloatStateOf(prefs.getFloat("ambient_ken_burns_speed", 1f).coerceIn(.5f, 1.5f)) }
+    var kenBurnsZoom by remember { mutableFloatStateOf(prefs.getFloat("ambient_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f)) }
     var selectedPhotos by remember { mutableStateOf(prefs.getStringSet("ambient_photo_uris", emptySet())?.toList().orEmpty()) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
@@ -100,6 +103,34 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             item { AmbientChoice("Photo rotation interval", "Change photo every $interval minute(s)", ambientIntervals.map { "$it min" }, ambientIntervals.indexOf(interval).coerceAtLeast(0)) { interval = ambientIntervals[it]; save("ambient_interval_minutes", interval) } }
             item { AmbientChoice("Clock position", ambientPositions[position], ambientPositions, position) { position = it; save("ambient_clock_position", it) } }
             if (visualStyle == 2) {
+                item {
+                    AmbientToggle("Ken Burns movement", "Slow cinematic zoom and pan on each photo", kenBurnsEnabled) {
+                        kenBurnsEnabled = it
+                        save("ambient_ken_burns_enabled", it)
+                    }
+                }
+                if (kenBurnsEnabled) {
+                    item {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0x33202B35)).padding(horizontal = 20.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Movement speed", color = Color.White, fontSize = 16.sp)
+                                    Text(when { kenBurnsSpeed < .75f -> "Very slow · cinematic"; kenBurnsSpeed > 1.25f -> "Fast"; else -> "Natural" }, color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
+                                }
+                                Text(String.format("%.1fx", kenBurnsSpeed), color = Color(0xFFB9D9F3), fontSize = 15.sp)
+                            }
+                            Slider(value = kenBurnsSpeed, onValueChange = { kenBurnsSpeed = it; save("ambient_ken_burns_speed", it) }, valueRange = .5f..1.5f)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Zoom amount", color = Color.White, fontSize = 16.sp)
+                                    Text("How far the image slowly moves closer", color = Color.White.copy(alpha = .58f), fontSize = 12.sp)
+                                }
+                                Text("${((kenBurnsZoom - 1f) * 100).toInt()}%", color = Color(0xFFB9D9F3), fontSize = 15.sp)
+                            }
+                            Slider(value = kenBurnsZoom, onValueChange = { kenBurnsZoom = it; save("ambient_ken_burns_zoom", it) }, valueRange = 1.02f..1.15f)
+                        }
+                    }
+                }
                 item {
                     AmbientAction("Choose photos from gallery", "${selectedPhotos.size} selected · only these photos will be shown", "SELECT  ›") {
                         photoPicker.launch(arrayOf("image/*"))
