@@ -81,7 +81,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val use24Hour = remember { prefs.getBoolean("ambient_24_hour", true) }
     val interval = remember { prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10) }
     val position = remember { prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4) }
-    val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f) }
+    val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .80f) }
     val visualStyle = remember { prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2) }
     val wallpapers = remember {
         val localPhotos = prefs.getStringSet("ambient_photo_uris", emptySet()).orEmpty()
