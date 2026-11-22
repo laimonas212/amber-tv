@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.animateScrollToItem
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.items
@@ -430,6 +432,9 @@ private fun AmberHome() {
                 wallpaperItems = remote
                 wallpaperChoice = remote.indexOfFirst { it.id == prefs.getString(KEY_WALLPAPER_ID, null) }
                     .takeIf { it >= 0 } ?: prefs.getInt(KEY_WALLPAPER, 0).coerceIn(remote.indices)
+                if (prefs.getString(KEY_WALLPAPER_ID, null).isNullOrBlank()) {
+                    prefs.edit().putString(KEY_WALLPAPER_ID, remote[wallpaperChoice].id).apply()
+                }
                 prefs.edit().putString(KEY_WALLPAPER_CACHE, JSONObject().put("wallpapers", org.json.JSONArray().apply {
                     remote.forEach { item ->
                         put(JSONObject().put("id", item.id).put("title", item.title).put("category", item.category)
@@ -729,6 +734,11 @@ private fun WallpaperLibraryScreen(
     LaunchedEffect(selectedIndex) { focusedIndex = selectedIndex; previewIndex = selectedIndex }
     val categories = listOf("All") + wallpapers.map { it.category }.distinct()
     val filtered = wallpapers.withIndex().filter { category == "All" || it.value.category == category }
+    val wallpaperListState = rememberLazyListState()
+    LaunchedEffect(selectedIndex, category, wallpapers.size) {
+        val selectedPosition = filtered.indexOfFirst { it.index == selectedIndex }
+        if (selectedPosition >= 0) wallpaperListState.animateScrollToItem(selectedPosition)
+    }
     Row(Modifier.fillMaxSize().background(Color(0x99101820)).padding(start = 64.dp, end = 64.dp, top = 28.dp, bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(34.dp)) {
         Column(Modifier.weight(0.82f).fillMaxHeight()) {
             ScreenTitle("Background", onBack)
@@ -742,7 +752,7 @@ private fun WallpaperLibraryScreen(
                     }
                 }
             }
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            LazyColumn(state = wallpaperListState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 items(filtered, key = { it.value.id }) { indexed ->
                     val wallpaper = indexed.value
                     val selected = indexed.index == selectedIndex
