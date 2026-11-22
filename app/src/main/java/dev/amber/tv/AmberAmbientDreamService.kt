@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val interval = remember { prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10) }
     val position = remember { prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4) }
     val dim = remember { prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .65f) }
+    val visualStyle = remember { prefs.getInt("ambient_visual_style", 0).coerceIn(0, 4) }
     val wallpapers = remember {
         runCatching {
             val raw = prefs.getString("remote_wallpaper_catalog", null) ?: return@runCatching emptyList()
@@ -126,10 +128,12 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val offsets = listOf(0, 8, -8, 14, -14)
     val offset = offsets[drift]
     Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
-        if (wallpapers.isNotEmpty()) {
+        if (visualStyle == 4 && wallpapers.isNotEmpty()) {
             Crossfade(targetState = wallpaperIndex, label = "ambient-wallpaper") { index ->
                 AsyncImage(model = wallpapers[index].url, contentDescription = wallpapers[index].title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
+        } else {
+            AndroidView(factory = { AuroraAmbientView(it, visualStyle) }, modifier = Modifier.fillMaxSize(), update = { })
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         Box(Modifier.fillMaxSize().padding(horizontal = 88.dp, vertical = 64.dp), contentAlignment = align) {
@@ -140,7 +144,7 @@ internal fun AmberAmbientContent(context: android.content.Context) {
                 if (showWeather && temperature != null) Text("VILNIUS  ·  $temperature°", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
             }
         }
-        if (wallpapers.isEmpty()) Text("AMBER AMBIENT", color = Color.White.copy(alpha = .35f), fontSize = 12.sp, letterSpacing = 4.sp,
+        if (visualStyle == 4 && wallpapers.isEmpty()) Text("ADD WALLPAPERS TO AMBER AMBIENT", color = Color.White.copy(alpha = .48f), fontSize = 12.sp, letterSpacing = 3.sp,
             modifier = Modifier.align(Alignment.BottomEnd).padding(28.dp))
     }
 }
