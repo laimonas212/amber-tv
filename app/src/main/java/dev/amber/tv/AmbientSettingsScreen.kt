@@ -30,7 +30,7 @@ private val ambientPositions = listOf("Bottom left", "Bottom right", "Top left",
 private val ambientVisualStyles = listOf("Gradient Dots", "Apple Image Playground", "Photo slideshow")
 
 @Composable
-internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onOpenSystemSettings: () -> Unit, onStartNow: () -> Unit) {
+internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onStartNow: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showClock by remember { mutableStateOf(prefs.getBoolean("ambient_show_clock", true)) }
     var showDate by remember { mutableStateOf(prefs.getBoolean("ambient_show_date", true)) }
@@ -39,6 +39,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
     var interval by remember { mutableIntStateOf(prefs.getInt("ambient_interval_minutes", 5).coerceIn(1, 10)) }
     var position by remember { mutableIntStateOf(prefs.getInt("ambient_clock_position", 0).coerceIn(0, 4)) }
     var dim by remember { mutableFloatStateOf(prefs.getFloat("ambient_dim", .22f).coerceIn(0f, .80f)) }
+    var startDelay by remember { mutableIntStateOf(prefs.getInt("ambient_start_delay_minutes", 5).coerceIn(0, 30)) }
     var visualStyle by remember { mutableIntStateOf(prefs.getInt("ambient_visual_style", 2).coerceIn(0, 2)) }
     var kenBurnsEnabled by remember { mutableStateOf(prefs.getBoolean("ambient_ken_burns_enabled", true)) }
     var kenBurnsSpeed by remember { mutableFloatStateOf(prefs.getFloat("ambient_ken_burns_speed", 1f).coerceIn(.5f, 1.5f)) }
@@ -161,8 +162,18 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             }
             item { AmbientAction("Start Amber Ambient now", "Launch the full-screen Ambient display immediately", "START NOW  ›", onStartNow) }
             item { Text("START DELAY", color = Color(0xFF91BCE0), fontSize = 11.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 8.dp)) }
-            item { AmbientAction("When should screensaver start?", "Set the idle timeout in Android TV system settings", "SET DELAY  ›", onOpenSystemSettings) }
-            item { Text("Android TV controls the actual idle delay. This opens the system page where you can choose after how long Amber Ambient starts.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
+            item {
+                AmbientChoice(
+                    "Start after inactivity",
+                    if (startDelay == 0) "Disabled · Amber TV will not auto-start Ambient" else "Starts automatically after $startDelay minute(s) without remote input",
+                    listOf("Off", "1 min", "2 min", "5 min", "10 min", "15 min", "30 min"),
+                    listOf(0, 1, 2, 5, 10, 15, 30).indexOf(startDelay).coerceAtLeast(0)
+                ) {
+                    startDelay = listOf(0, 1, 2, 5, 10, 15, 30)[it]
+                    save("ambient_start_delay_minutes", startDelay)
+                }
+            }
+            item { Text("This in-app timer runs while Amber TV is on screen. Any remote-control activity resets the countdown.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
         }
     }
 }
