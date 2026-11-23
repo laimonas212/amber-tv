@@ -531,6 +531,7 @@ private fun AmberHome() {
     var desktopKenBurnsSpeed by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_speed", 1f).coerceIn(.5f, 1.5f)) }
     var desktopKenBurnsZoom by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f)) }
     var dockNoise by remember { mutableIntStateOf(prefs.getInt("dock_noise_level", 18).coerceIn(0, 100)) }
+    var dockBounceIntensity by remember { mutableFloatStateOf(prefs.getFloat("dock_bounce_intensity", 1f).coerceIn(0f, 2f)) }
     var dockWiggle by remember { mutableStateOf(false) }
     var dockActionPackage by remember { mutableStateOf<String?>(null) }
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
@@ -733,9 +734,11 @@ private fun AmberHome() {
                                         val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
                                         lastDockFocusedIndex = index
                                         scope.launch {
-                                            val kick = (dockLiquid.value + if (movingRight) .75f else -.75f).coerceIn(-1.2f, 1.2f)
-                                            dockLiquid.snapTo(kick)
-                                            dockLiquid.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 110f))
+                                            val kick = (dockLiquid.value + (if (movingRight) .75f else -.75f) * dockBounceIntensity).coerceIn(-1.2f * dockBounceIntensity, 1.2f * dockBounceIntensity)
+                                            if (dockBounceIntensity > 0f) {
+                                                dockLiquid.snapTo(kick)
+                                                dockLiquid.animateTo(0f, spring(dampingRatio = (0.72f - dockBounceIntensity * 0.22f).coerceIn(0.28f, 0.72f), stiffness = 110f + dockBounceIntensity * 90f))
+                                            } else dockLiquid.snapTo(0f)
                                         }
                                         dockScrollJob?.cancel()
                                         dockScrollJob = scope.launch {
@@ -788,6 +791,8 @@ private fun AmberHome() {
                 desktopKenBurnsZoom = desktopKenBurnsZoom,
                 dockNoise = dockNoise,
                 onDockNoise = { level -> dockNoise = level; prefs.edit().putInt("dock_noise_level", level).apply() },
+                dockBounceIntensity = dockBounceIntensity,
+                onDockBounceIntensity = { value -> dockBounceIntensity = value; prefs.edit().putFloat("dock_bounce_intensity", value).apply() },
                 onDesktopKenBurns = { enabled -> desktopKenBurns = enabled; prefs.edit().putBoolean("desktop_ken_burns_enabled", enabled).apply() },
                 onDesktopKenBurnsSpeed = { speed -> desktopKenBurnsSpeed = speed; prefs.edit().putFloat("desktop_ken_burns_speed", speed).apply() },
                 onDesktopKenBurnsZoom = { zoom -> desktopKenBurnsZoom = zoom; prefs.edit().putFloat("desktop_ken_burns_zoom", zoom).apply() },
@@ -1048,7 +1053,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, dockBounceIntensity: Float, onDockBounceIntensity: (Float) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     var category by remember { mutableIntStateOf(0) }
     val palette = LocalAmberPalette.current
@@ -1083,8 +1088,8 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                 targetState = category,
                 transitionSpec = {
                     val dir = if (targetState > initialState) 1 else -1
-                    (fadeIn(tween(220)) + slideInVertically(animationSpec = spring(dampingRatio = .78f, stiffness = 300f)) { fullHeight -> fullHeight / 14 * dir }) togetherWith
-                        fadeOut(tween(120))
+                    (fadeIn(tween(300, easing = FastOutSlowInEasing)) + slideInVertically(animationSpec = spring(dampingRatio = .72f, stiffness = 260f)) { fullHeight -> fullHeight / 9 * dir } + scaleIn(initialScale = .975f, animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+                        (fadeOut(tween(150)) + slideOutVertically(animationSpec = tween(150)) { fullHeight -> -fullHeight / 24 } + scaleOut(targetScale = .985f, animationSpec = tween(150)))
                 },
                 label = "settings-pane"
             ) { current ->
@@ -1102,6 +1107,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                             item { SettingsGlassRow("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onClick = onIconPack) }
                             item { SettingsToggleRow("App names", "Show names below Dock icons (off = larger icons)", "Aa", showAppNames) { onShowAppNames(!showAppNames) } }
                             item { SettingsGlassRow("Dock grain", if (dockNoise == 0) "Off" else "$dockNoise%", "Fine noise texture on the frosted-glass Dock", "▦", onClick = { choiceDialog = SettingsChoice("Dock grain", grainLabels, (dockNoise / 10).coerceIn(0, 10)) { onDockNoise(if (it == 0) 0 else it * 10) } }) }
+                            item { SettingsGlassRow("Dock bounce intensity", if (dockBounceIntensity == 0f) "Off" else "${(dockBounceIntensity * 100).toInt()}%", "Control how strongly the Dock reacts when moving focus", "↕", onClick = { choiceDialog = SettingsChoice("Dock bounce intensity", listOf("Off", "25%", "50%", "75%", "100%", "125%", "150%", "175%", "200%"), (dockBounceIntensity * 4).toInt().coerceIn(0, 8)) { onDockBounceIntensity(it * .25f) } }) }
                         }
                         2 -> {
                             item { SettingsGlassRow("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount", "Online library · choose your look", "▧", onClick = onWallpaper) }
