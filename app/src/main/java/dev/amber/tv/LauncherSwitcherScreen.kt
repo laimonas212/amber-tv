@@ -1,6 +1,11 @@
 package dev.amber.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +21,7 @@ import androidx.tv.material3.Surface as TvSurface
 
 @Composable
 internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, onGoogleTv: () -> Unit, onHomeButtonHelper: () -> Unit) {
+    AnimatedVisibility(visible = true, enter = fadeIn(tween(280)) + slideInVertically(animationSpec = tween(340)) { it / 18 } + scaleIn(initialScale = .975f, animationSpec = tween(340)), label = "launcher-settings-enter") {
     Column(
         Modifier.fillMaxSize().background(Color(0xFF101820)).padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -36,6 +42,7 @@ internal fun LauncherSwitcherScreen(onBack: () -> Unit, onAmberTv: () -> Unit, o
             color = Color.White.copy(alpha = .52f), fontSize = 12.sp, lineHeight = 18.sp,
             modifier = Modifier.padding(top = 6.dp)
         )
+    }
     }
 }
 
