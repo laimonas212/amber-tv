@@ -701,7 +701,7 @@ private fun AmberHome() {
                                 val index = dock.indexOf(app.packageName)
                                 HomeAppEntry(app, homeLayout, homeContentMode, homeIconPosition, homeIconSize, homeFontSize, iconMode, removeIconBackground, font,
                                     onClick = { launch(app) },
-                                    onFocused = { if (homeLayout == 0 && dockBounceIntensity > 0f) scope.launch { dockLiquid.snapTo(.22f * dockBounceIntensity); dockLiquid.animateTo(0f, spring(dampingRatio = .62f, stiffness = 230f)) } },
+                                    onFocused = { scope.launch { homeListState.animateScrollToItem(index); if (homeLayout == 0 && dockBounceIntensity > 0f) { dockLiquid.snapTo(.22f * dockBounceIntensity); dockLiquid.animateTo(0f, spring(dampingRatio = .62f, stiffness = 230f)) } } },
                                     onLongPress = { dockActionPackage = app.packageName },
                                     onMove = { delta -> moveDockItem(index, delta) })
                             }
@@ -1197,6 +1197,7 @@ private fun HomeAppEntry(
 ) {
     val bitmap = rememberAppIcon(app, removeIconBackground, 160)
     var focused by remember { mutableStateOf(false) }
+    val focusScale by animateFloatAsState(if (focused) 1.045f else 1f, animationSpec = spring(dampingRatio = .72f, stiffness = 320f), label = "home-app-focus-zoom")
     val showIcon = contentMode != 2
     val showText = contentMode != 0
     val rowStyle = layout == 1
@@ -1206,8 +1207,7 @@ private fun HomeAppEntry(
         modifier = (if (rowStyle) Modifier.fillMaxWidth().height((iconSize + 28).coerceAtLeast(66).dp) else Modifier.fillMaxWidth().height(100.dp))
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
             .graphicsLayer {
-                val target = if (focused) 1.045f else 1f
-                scaleX = target; scaleY = target
+                scaleX = focusScale; scaleY = focusScale
             },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
