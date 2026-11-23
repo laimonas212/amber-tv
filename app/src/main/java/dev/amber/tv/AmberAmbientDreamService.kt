@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -151,12 +152,12 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val offset = offsets[drift]
     Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
         if (visualStyle == 2 && wallpapers.isNotEmpty()) {
-            Crossfade(targetState = wallpaperIndex, label = "ambient-wallpaper") { index ->
+            Crossfade(targetState = wallpaperIndex, animationSpec = tween(durationMillis = 1800), label = "ambient-wallpaper") { index ->
                 val progress = if (kenBurnsEnabled) kenBurnsProgress.value else 0f
                 val direction = if (index % 2 == 0) 1f else -1f
                 val scale = 1f + (kenBurnsZoom - 1f) * progress
                 AsyncImage(
-                    model = wallpapers[index].url,
+                    model = ImageRequest.Builder(context).data(wallpapers[index].url).crossfade(1200).build(),
                     contentDescription = wallpapers[index].title,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
                         scaleX = scale
@@ -178,11 +179,14 @@ internal fun AmberAmbientContent(context: android.content.Context) {
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
         Box(Modifier.fillMaxSize().padding(horizontal = 88.dp, vertical = 64.dp), contentAlignment = align) {
-            Column(horizontalAlignment = when (position) { 1, 3 -> Alignment.End; 4 -> Alignment.CenterHorizontally; else -> Alignment.Start },
-                modifier = Modifier.offset(x = offset.dp, y = (-offset).dp)) {
-                if (showClock) Text(time, color = Color.White, fontSize = 76.sp, fontWeight = FontWeight.ExtraLight, letterSpacing = (-2).sp)
-                if (showDate) Text(date, color = Color.White.copy(alpha = .82f), fontSize = 20.sp, fontWeight = FontWeight.Light)
-                if (showWeather && temperature != null) Text("VILNIUS  ·  $temperature°", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+            Crossfade(targetState = drift, animationSpec = tween(durationMillis = 1100), label = "ambient-clock-drift") { driftStep ->
+                val softOffset = offsets[driftStep]
+                Column(horizontalAlignment = when (position) { 1, 3 -> Alignment.End; 4 -> Alignment.CenterHorizontally; else -> Alignment.Start },
+                    modifier = Modifier.offset(x = softOffset.dp, y = (-softOffset).dp)) {
+                    if (showClock) Text(time, color = Color.White, fontSize = 76.sp, fontWeight = FontWeight.ExtraLight, letterSpacing = (-2).sp)
+                    if (showDate) Text(date, color = Color.White.copy(alpha = .82f), fontSize = 20.sp, fontWeight = FontWeight.Light)
+                    if (showWeather && temperature != null) Text("VILNIUS  ·  $temperature°", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 12.dp))
+                }
             }
         }
         if (visualStyle == 2 && wallpapers.isEmpty()) Text("ADD WALLPAPERS TO AMBER AMBIENT", color = Color.White.copy(alpha = .48f), fontSize = 12.sp, letterSpacing = 3.sp,
