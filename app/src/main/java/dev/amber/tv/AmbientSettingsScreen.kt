@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +71,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             }
         }.apply()
     }
+    AnimatedVisibility(visible = true, enter = fadeIn(tween(280)) + slideInVertically(animationSpec = tween(340)) { it / 18 } + scaleIn(initialScale = .975f, animationSpec = tween(340)), label = "ambient-settings-enter") {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 28.dp, bottom = 24.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TvSurface(onClick = onBack, modifier = Modifier.size(width = 110.dp, height = 48.dp),
@@ -175,6 +179,7 @@ internal fun AmbientSettingsScreen(prefs: SharedPreferences, onBack: () -> Unit,
             }
             item { Text("This in-app timer runs while Amber TV is on screen. Any remote-control activity resets the countdown.", color = Color.White.copy(alpha = .55f), fontSize = 12.sp) }
         }
+    }
     }
 }
 
