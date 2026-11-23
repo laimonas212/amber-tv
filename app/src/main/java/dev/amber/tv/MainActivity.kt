@@ -10,6 +10,8 @@ import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -207,9 +209,42 @@ private suspend fun fetchRemoteWallpapers(): List<WallpaperItem> = withContext(D
 
 
 class MainActivity : ComponentActivity() {
+    private val ambientIdleHandler = Handler(Looper.getMainLooper())
+    private val ambientIdleStart = Runnable {
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            runCatching { startActivity(Intent(this, AmberAmbientActivity::class.java)) }
+        }
+    }
+
+    private fun resetAmbientIdleTimer() {
+        ambientIdleHandler.removeCallbacks(ambientIdleStart)
+        val meta = getSharedPreferences("amber_tv_profiles", MODE_PRIVATE)
+        val profileId = meta.getString("active_profile", "profile_1") ?: "profile_1"
+        val prefs = getSharedPreferences("amber_tv_$profileId", MODE_PRIVATE)
+        val delayMinutes = prefs.getInt("ambient_start_delay_minutes", 5)
+        if (delayMinutes > 0 && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            ambientIdleHandler.postDelayed(ambientIdleStart, delayMinutes * 60_000L)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { Material3Theme { TvMaterialTheme { AmberHome() } } }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resetAmbientIdleTimer()
+    }
+
+    override fun onPause() {
+        ambientIdleHandler.removeCallbacks(ambientIdleStart)
+        super.onPause()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        resetAmbientIdleTimer()
     }
 }
 
@@ -370,6 +405,7 @@ private fun AmberHome() {
     var desktopKenBurns by remember { mutableStateOf(prefs.getBoolean("desktop_ken_burns_enabled", false)) }
     var desktopKenBurnsSpeed by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_speed", 1f).coerceIn(.5f, 1.5f)) }
     var desktopKenBurnsZoom by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f)) }
+    var dockNoise by remember { mutableIntStateOf(prefs.getInt("dock_noise_level", 18).coerceIn(0, 100)) }
     var dockWiggle by remember { mutableStateOf(false) }
     var dockActionPackage by remember { mutableStateOf<String?>(null) }
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
@@ -495,7 +531,7 @@ private fun AmberHome() {
                 val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
                     val dockShape = RoundedCornerShape(36.dp)
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        // Translucent frosted-glass Dock surface; no duplicate wallpaper layer.
+                        // Frosted-glass surface with a subtle, clipped grain texture.
                         Box(
                             Modifier.fillMaxSize()
                                 .clip(dockShape)
@@ -508,6 +544,25 @@ private fun AmberHome() {
                                         )
                                     )
                                 )
+                                .drawWithContent {
+                                    drawContent()
+                                    if (dockNoise > 0) {
+                                        val random = kotlin.random.Random(7319)
+                                        val dotCount = (size.width * size.height / 105f * dockNoise / 100f).toInt()
+                                        val alpha = .11f * dockNoise / 100f
+                                        repeat(dotCount) {
+                                            val light = random.nextBoolean()
+                                            drawCircle(
+                                                color = (if (light) Color.White else Color.Black).copy(alpha = alpha),
+                                                radius = if (light) .65.dp.toPx() else .8.dp.toPx(),
+                                                center = androidx.compose.ui.geometry.Offset(
+                                                    random.nextFloat() * size.width,
+                                                    random.nextFloat() * size.height
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
                                 .border(1.dp, Color.White.copy(alpha = .18f), dockShape)
                         )
                         LazyRow(
@@ -579,11 +634,13 @@ private fun AmberHome() {
                 desktopKenBurns = desktopKenBurns,
                 desktopKenBurnsSpeed = desktopKenBurnsSpeed,
                 desktopKenBurnsZoom = desktopKenBurnsZoom,
+                dockNoise = dockNoise,
+                onDockNoise = { level -> dockNoise = level; prefs.edit().putInt("dock_noise_level", level).apply() },
                 onDesktopKenBurns = { enabled -> desktopKenBurns = enabled; prefs.edit().putBoolean("desktop_ken_burns_enabled", enabled).apply() },
                 onDesktopKenBurnsSpeed = { speed -> desktopKenBurnsSpeed = speed; prefs.edit().putFloat("desktop_ken_burns_speed", speed).apply() },
                 onDesktopKenBurnsZoom = { zoom -> desktopKenBurnsZoom = zoom; prefs.edit().putFloat("desktop_ken_burns_zoom", zoom).apply() },
                 onBack = { screen = Screen.HOME })
-            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onOpenSystemSettings = { runCatching { context.startActivity(Intent(Settings.ACTION_DREAM_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } } }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+            Screen.AMBIENT -> AmbientSettingsScreen(prefs, onBack = { screen = Screen.SETTINGS }, onStartNow = { runCatching { context.startActivity(Intent(context, AmberAmbientActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
             Screen.LAUNCHER -> LauncherSwitcherScreen(
                 onBack = { screen = Screen.SETTINGS },
                 onAmberTv = {
@@ -839,7 +896,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
         ScreenTitle("Settings", onBack)
@@ -854,6 +911,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                 item { SettingsTile("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×")[listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)], "Choose how quickly the wallpaper moves", "↗") { choiceDialog = SettingsChoice("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×"), listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)) { onDesktopKenBurnsSpeed(listOf(.5f,.75f,1f,1.25f,1.5f)[it]) } } }
                 item { SettingsTile("Desktop zoom", "${((desktopKenBurnsZoom - 1f) * 100).toInt()}%", "Choose the amount of zoom", "⊕") { choiceDialog = SettingsChoice("Desktop zoom", listOf("2%","4%","6%","8%","10%","12%","15%"), listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f).indexOf(desktopKenBurnsZoom).coerceAtLeast(0)) { onDesktopKenBurnsZoom(listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f)[it]) } } }
             }
+            item { SettingsTile("Dock grain", if (dockNoise == 0) "Off" else "$dockNoise% · subtle texture", "Adjust the fine noise texture on the frosted-glass Dock", "▦") { choiceDialog = SettingsChoice("Dock grain", listOf("Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"), (dockNoise / 10).coerceIn(0, 10)) { onDockNoise(if (it == 0) 0 else it * 10) } } }
             item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
             item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
             item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
