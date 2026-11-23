@@ -533,11 +533,18 @@ private fun AmberHome() {
     var desktopKenBurnsZoom by remember { mutableFloatStateOf(prefs.getFloat("desktop_ken_burns_zoom", 1.06f).coerceIn(1.02f, 1.15f)) }
     var dockNoise by remember { mutableIntStateOf(prefs.getInt("dock_noise_level", 18).coerceIn(0, 100)) }
     var dockBounceIntensity by remember { mutableFloatStateOf(prefs.getFloat("dock_bounce_intensity", 1f).coerceIn(0f, 2f)) }
+    var homeLayout by remember { mutableIntStateOf(prefs.getInt("home_layout", 0).coerceIn(0, 1)) }
+    var homeSide by remember { mutableIntStateOf(prefs.getInt("home_side", 0).coerceIn(0, 1)) }
+    var homeContentMode by remember { mutableIntStateOf(prefs.getInt("home_content_mode", 1).coerceIn(0, 2)) }
+    var homeIconPosition by remember { mutableIntStateOf(prefs.getInt("home_icon_position", 0).coerceIn(0, 1)) }
+    var homeFontSize by remember { mutableIntStateOf(prefs.getInt("home_font_size", 16).coerceIn(12, 28)) }
+    var homeIconSize by remember { mutableIntStateOf(prefs.getInt("home_icon_size", 42).coerceIn(24, 72)) }
     var dockWiggle by remember { mutableStateOf(false) }
     var dockActionPackage by remember { mutableStateOf<String?>(null) }
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
     var showAddDockDialog by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
+    val homeListState = rememberLazyListState()
     // Jelly "wobble" that is kicked on every focus move and settles with a low-damping spring.
     val dockLiquid = remember { Animatable(0f) }
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
@@ -662,110 +669,43 @@ private fun AmberHome() {
         when (activeScreen) {
             Screen.HOME -> {
                 Box(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
-                        if (showWeather) {
-                            if (weather != null) WeatherChip(weather!!)
-                            else Text("Weather unavailable · retrying", color = Color.White.copy(alpha = .65f), fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth().padding(start = 72.dp, end = 76.dp, top = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(now.format(DateTimeFormatter.ofPattern("H:mm")), color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Light, fontFamily = font)
+                            if (showWeather) { if (weather != null) WeatherChip(weather!!) else Text("Weather unavailable · retrying", color = Color.White.copy(alpha = .65f), fontSize = 13.sp) }
+                        }
+                        Row(Modifier.padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ProfileHeaderButton { showProfiles = true }
+                            HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
+                            HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
                         }
                     }
-                    Row(Modifier.padding(horizontal = 4.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ProfileHeaderButton { showProfiles = true }
-                        HeaderButton(Icons.Default.Apps, "All apps") { screen = Screen.ALL_APPS }
-                        HeaderButton(Icons.Default.Settings, "Launcher settings") { screen = Screen.SETTINGS }
-                    }
-                }
-                val dockApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
-                    val dockShape = RoundedCornerShape(36.dp)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 74.dp, end = 74.dp, bottom = 40.dp).height(148.dp).clip(dockShape)) {
-                        // Frosted-glass surface with a subtle, clipped grain texture.
-                        Box(
-                            Modifier.fillMaxSize()
-                                .clip(dockShape)
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            LocalAmberPalette.current.surface.copy(alpha = .58f),
-                                            LocalAmberPalette.current.surface.copy(alpha = .62f),
-                                            LocalAmberPalette.current.surface.copy(alpha = .84f)
-                                        )
-                                    )
-                                )
-                                .drawWithContent {
-                                    drawContent()
-                                    if (dockNoise > 0) {
-                                        val random = kotlin.random.Random(7319)
-                                        val dotCount = (size.width * size.height / 105f * dockNoise / 100f).toInt()
-                                        val alpha = .11f * dockNoise / 100f
-                                        repeat(dotCount) {
-                                            val light = random.nextBoolean()
-                                            drawCircle(
-                                                color = (if (light) Color.White else Color.Black).copy(alpha = alpha),
-                                                radius = if (light) .65.dp.toPx() else .8.dp.toPx(),
-                                                center = androidx.compose.ui.geometry.Offset(
-                                                    random.nextFloat() * size.width,
-                                                    random.nextFloat() * size.height
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                                .border(1.dp, Color.White.copy(alpha = .18f), dockShape)
-                        )
-                        LazyRow(
-                            state = dockListState,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 6.dp)
-                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                .drawWithContent {
-                                    drawContent()
-                                    drawRect(brush = Brush.horizontalGradient(0f to Color.Transparent, 0.10f to Color.White, 0.90f to Color.White, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-                                },
-                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically
+                    val homeApps = dock.mapNotNull { p -> apps.find { it.packageName == p } }
+                    val sideAlignment = if (homeSide == 0) Alignment.CenterStart else Alignment.CenterEnd
+                    val panelShape = RoundedCornerShape(if (homeLayout == 0) 32.dp else 25.dp)
+                    Box(Modifier.align(sideAlignment)
+                        .padding(start = if (homeSide == 0) 38.dp else 0.dp, end = if (homeSide == 1) 38.dp else 0.dp, top = 112.dp, bottom = 30.dp)
+                        .width(if (homeLayout == 0) 172.dp else 380.dp).fillMaxHeight(.78f)
+                        .clip(panelShape)
+                        .background(Brush.verticalGradient(listOf(LocalAmberPalette.current.surface.copy(alpha = .46f), LocalAmberPalette.current.surface.copy(alpha = .78f))))
+                        .border(1.dp, Color.White.copy(alpha = .16f), panelShape)
+                    ) {
+                        LazyColumn(state = homeListState, modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 12.dp)
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent { drawContent(); drawRect(brush = Brush.verticalGradient(0f to Color.Transparent, .07f to Color.White, .93f to Color.White, 1f to Color.Transparent), blendMode = BlendMode.DstIn) },
+                            contentPadding = PaddingValues(vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(if (homeLayout == 0) 9.dp else 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            items(dockApps, key = { it.packageName }) { app ->
+                            items(homeApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
-                                AppDockItem(app, index, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
-                                    liquid = { dockLiquid.value }, listState = dockListState,
-                                    isMoving = movingDockPackage == app.packageName,
+                                HomeAppEntry(app, homeLayout, homeContentMode, homeIconPosition, homeIconSize, homeFontSize, iconMode, removeIconBackground, font,
+                                    onClick = { launch(app) },
+                                    onFocused = { if (homeLayout == 0 && dockBounceIntensity > 0f) scope.launch { dockLiquid.snapTo(.22f * dockBounceIntensity); dockLiquid.animateTo(0f, spring(dampingRatio = .62f, stiffness = 230f)) } },
                                     onLongPress = { dockActionPackage = app.packageName },
-                                    onRemove = { saveDock(dock - app.packageName); dockActionPackage = null },
-                                    onClick = { if (movingDockPackage == app.packageName) movingDockPackage = null else if (dockWiggle) dockWiggle = false else launch(app) },
-                                    onFocused = {
-                                        val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
-                                        lastDockFocusedIndex = index
-                                        scope.launch {
-                                            val kick = (dockLiquid.value + (if (movingRight) .75f else -.75f) * dockBounceIntensity).coerceIn(-1.2f * dockBounceIntensity, 1.2f * dockBounceIntensity)
-                                            if (dockBounceIntensity > 0f) {
-                                                dockLiquid.snapTo(kick)
-                                                dockLiquid.animateTo(0f, spring(dampingRatio = (0.72f - dockBounceIntensity * 0.22f).coerceIn(0.28f, 0.72f), stiffness = 110f + dockBounceIntensity * 90f))
-                                            } else dockLiquid.snapTo(0f)
-                                        }
-                                        dockScrollJob?.cancel()
-                                        dockScrollJob = scope.launch {
-                                            // Move the row by one item only when the focused item reaches an edge.
-                                            delay(16)
-                                            val item = dockListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-                                            if (item != null) {
-                                                val density = context.resources.displayMetrics.density
-                                                val margin = (18f * density).toInt()
-                                                val rightEdge = dockListState.layoutInfo.viewportSize.width - margin
-                                                val leftEdge = margin
-                                                val step = (168f * density)
-                                                if (movingRight && item.offset + item.size > rightEdge) {
-                                                    dockListState.animateScrollBy(step, spring(dampingRatio = 0.82f, stiffness = 240f))
-                                                } else if (!movingRight && item.offset < leftEdge) {
-                                                    dockListState.animateScrollBy(-step, spring(dampingRatio = 0.82f, stiffness = 240f))
-                                                }
-                                            }
-                                        }
-                                    },
-                                    onMove = { delta -> moveDockItem(index, delta) }
-                                )
+                                    onMove = { delta -> moveDockItem(index, delta) })
                             }
-                            item(key = "dock_add_button") {
-                                AddDockButton { showAddDockDialog = true }
-                            }
+                            item(key = "home_add_app") { AddDockButton { showAddDockDialog = true } }
                         }
                     }
                 }
@@ -794,6 +734,12 @@ private fun AmberHome() {
                 onDockNoise = { level -> dockNoise = level; prefs.edit().putInt("dock_noise_level", level).apply() },
                 dockBounceIntensity = dockBounceIntensity,
                 onDockBounceIntensity = { value -> dockBounceIntensity = value; prefs.edit().putFloat("dock_bounce_intensity", value).apply() },
+                homeLayout = homeLayout, onHomeLayout = { homeLayout = it; prefs.edit().putInt("home_layout", it).apply() },
+                homeSide = homeSide, onHomeSide = { homeSide = it; prefs.edit().putInt("home_side", it).apply() },
+                homeContentMode = homeContentMode, onHomeContentMode = { homeContentMode = it; prefs.edit().putInt("home_content_mode", it).apply() },
+                homeIconPosition = homeIconPosition, onHomeIconPosition = { homeIconPosition = it; prefs.edit().putInt("home_icon_position", it).apply() },
+                homeFontSize = homeFontSize, onHomeFontSize = { homeFontSize = it; prefs.edit().putInt("home_font_size", it).apply() },
+                homeIconSize = homeIconSize, onHomeIconSize = { homeIconSize = it; prefs.edit().putInt("home_icon_size", it).apply() },
                 onDesktopKenBurns = { enabled -> desktopKenBurns = enabled; prefs.edit().putBoolean("desktop_ken_burns_enabled", enabled).apply() },
                 onDesktopKenBurnsSpeed = { speed -> desktopKenBurnsSpeed = speed; prefs.edit().putFloat("desktop_ken_burns_speed", speed).apply() },
                 onDesktopKenBurnsZoom = { zoom -> desktopKenBurnsZoom = zoom; prefs.edit().putFloat("desktop_ken_burns_zoom", zoom).apply() },
@@ -1054,7 +1000,7 @@ private fun WallpaperLibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, dockBounceIntensity: Float, onDockBounceIntensity: (Float) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
+private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, dockBounceIntensity: Float, onDockBounceIntensity: (Float) -> Unit, homeLayout: Int, onHomeLayout: (Int) -> Unit, homeSide: Int, onHomeSide: (Int) -> Unit, homeContentMode: Int, onHomeContentMode: (Int) -> Unit, homeIconPosition: Int, onHomeIconPosition: (Int) -> Unit, homeFontSize: Int, onHomeFontSize: (Int) -> Unit, homeIconSize: Int, onHomeIconSize: (Int) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     var category by remember { mutableIntStateOf(0) }
     val palette = LocalAmberPalette.current
