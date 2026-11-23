@@ -1004,7 +1004,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
     var category by remember { mutableIntStateOf(0) }
     val palette = LocalAmberPalette.current
-    val categories = listOf("Appearance" to "✦", "Dock & icons" to "◈", "Wallpaper & motion" to "▧", "Ambient & weather" to "◷", "System" to "⚙")
+    val categories = listOf("Appearance" to "✦", "Home screen" to "⌂", "Dock & icons" to "◈", "Wallpaper & motion" to "▧", "Ambient & weather" to "◷", "System" to "⚙")
     val iconModes = listOf("Full color", "Monochrome", "Mono · color on focus")
     val fonts = listOf("Sans Serif", "Serif", "Monospace")
     val accents = listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose", "Neutral", "Pink", "Soft yellow", "Peach", "Lilac", "Sage")
@@ -1049,6 +1049,15 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                             item { SettingsGlassRow("Typography", fonts[fontChoice.coerceIn(fonts.indices)], "Change the system typeface", "Aa", onClick = { choiceDialog = SettingsChoice("Typography", fonts, fontChoice, onFont) }) }
                         }
                         1 -> {
+                            item { SettingsGlassRow("Layout", if (homeLayout == 0) "Dock" else "List", "Choose the Home app presentation", "▤", onClick = { choiceDialog = SettingsChoice("Home layout", listOf("Dock", "List"), homeLayout, onHomeLayout) }) }
+                            item { SettingsGlassRow("Position", if (homeSide == 0) "Left" else "Right", "Place the vertical app panel on either side", "↔", onClick = { choiceDialog = SettingsChoice("Home position", listOf("Left", "Right"), homeSide, onHomeSide) }) }
+                            item { SettingsGlassRow("Content", listOf("Icons only", "Icons and text", "Text only")[homeContentMode], "Choose what each app entry displays", "◈", onClick = { choiceDialog = SettingsChoice("Home content", listOf("Icons only", "Icons and text", "Text only"), homeContentMode, onHomeContentMode) }) }
+                            item { SettingsGlassRow("Icon position", if (homeIconPosition == 0) "Left / Top" else "Right / Bottom", "Choose the icon placement relative to its label", "⇄", onClick = { choiceDialog = SettingsChoice("Home icon position", listOf("Left / Top", "Right / Bottom"), homeIconPosition, onHomeIconPosition) }) }
+                            item { SettingsGlassRow("Font size", "$homeFontSize sp", "Set the app label size", "Aa", onClick = { val v = listOf(12, 14, 16, 18, 20, 22, 24, 26, 28); choiceDialog = SettingsChoice("Home font size", v.map { "$it sp" }, v.indexOf(homeFontSize).coerceAtLeast(0)) { onHomeFontSize(v[it]) } }) }
+                            item { SettingsGlassRow("Font family", fonts[fontChoice.coerceIn(fonts.indices)], "Change the Home app label typeface", "Aa", onClick = { choiceDialog = SettingsChoice("Typography", fonts, fontChoice, onFont) }) }
+                            item { SettingsGlassRow("Icon size", "$homeIconSize dp", "Adjust the app icon dimensions", "▣", onClick = { val v = listOf(24, 28, 32, 36, 42, 48, 56, 64, 72); choiceDialog = SettingsChoice("Home icon size", v.map { "$it dp" }, v.indexOf(homeIconSize).coerceAtLeast(0)) { onHomeIconSize(v[it]) } }) }
+                        }
+                        2 -> {
                             item { SettingsGlassRow("Icon style", iconModes[iconMode.coerceIn(iconModes.indices)], "Choose how app icons look", "◈", onClick = { choiceDialog = SettingsChoice("Icon style", iconModes, iconMode, onIconMode) }) }
                             item { SettingsToggleRow("Hide icon background", "Remove adaptive icon background where supported", "◉", removeIconBackground) { onIconBackground(!removeIconBackground) } }
                             item { SettingsGlassRow("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onClick = onIconPack) }
@@ -1056,7 +1065,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                             item { SettingsGlassRow("Dock grain", if (dockNoise == 0) "Off" else "$dockNoise%", "Fine noise texture on the frosted-glass Dock", "▦", onClick = { choiceDialog = SettingsChoice("Dock grain", grainLabels, (dockNoise / 10).coerceIn(0, 10)) { onDockNoise(if (it == 0) 0 else it * 10) } }) }
                             item { SettingsGlassRow("Dock bounce intensity", if (dockBounceIntensity == 0f) "Off" else "${(dockBounceIntensity * 100).toInt()}%", "Control how strongly the Dock reacts when moving focus", "↕", onClick = { choiceDialog = SettingsChoice("Dock bounce intensity", listOf("Off", "25%", "50%", "75%", "100%", "125%", "150%", "175%", "200%"), (dockBounceIntensity * 4).toInt().coerceIn(0, 8)) { onDockBounceIntensity(it * .25f) } }) }
                         }
-                        2 -> {
+                        3 -> {
                             item { SettingsGlassRow("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount", "Online library · choose your look", "▧", onClick = onWallpaper) }
                             item { SettingsToggleRow("Desktop Ken Burns", "Subtle zoom and pan on the Home background", "◫", desktopKenBurns) { onDesktopKenBurns(!desktopKenBurns) } }
                             if (desktopKenBurns) {
@@ -1064,7 +1073,7 @@ private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontCho
                                 item { SettingsGlassRow("Zoom amount", "${((desktopKenBurnsZoom - 1f) * 100).toInt()}%", "Choose the amount of zoom", "⊕", onClick = { choiceDialog = SettingsChoice("Desktop zoom", zoomLabels, zooms.indexOf(desktopKenBurnsZoom).coerceAtLeast(0)) { onDesktopKenBurnsZoom(zooms[it]) } }) }
                             }
                         }
-                        3 -> {
+                        4 -> {
                             item { SettingsGlassRow("Amber Ambient", "Customize", "Clock, date, slideshow, OLED dimming", "◷", onClick = onAmbient) }
                             item { SettingsToggleRow("Weather", "Current conditions on Home · Vilnius", "☼", showWeather) { onWeather(!showWeather) } }
                         }
