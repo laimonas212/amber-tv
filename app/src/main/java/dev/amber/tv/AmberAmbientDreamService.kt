@@ -7,6 +7,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,8 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
@@ -152,14 +156,44 @@ internal fun AmberAmbientContent(context: android.content.Context) {
     val offset = offsets[drift]
     Box(Modifier.fillMaxSize().background(Color(0xFF05080B))) {
         if (visualStyle == 2 && wallpapers.isNotEmpty()) {
-            Crossfade(targetState = wallpaperIndex, animationSpec = tween(durationMillis = 1800), label = "ambient-wallpaper") { index ->
-                val progress = if (kenBurnsEnabled) kenBurnsProgress.value else 0f
-                val direction = if (index % 2 == 0) 1f else -1f
-                val scale = 1f + (kenBurnsZoom - 1f) * progress
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(wallpapers[index].url).crossfade(1200).build(),
-                    contentDescription = wallpapers[index].title,
+            var displayedIndex by remember { mutableIntStateOf(0) }
+            val incomingRequest = remember(wallpaperIndex) {
+                ImageRequest.Builder(context)
+                    .data(wallpapers[wallpaperIndex].url)
+                    .crossfade(false)
+                    .build()
+            }
+            val incomingPainter = rememberAsyncImagePainter(incomingRequest)
+            val incomingAlpha = remember { Animatable(0f) }
+
+            LaunchedEffect(wallpaperIndex) {
+                if (wallpaperIndex != displayedIndex) {
+                    incomingAlpha.snapTo(0f)
+                    val loadedState = snapshotFlow { incomingPainter.state }
+                        .first { it is coil.compose.AsyncImagePainter.State.Success || it is coil.compose.AsyncImagePainter.State.Error }
+                    if (loadedState is coil.compose.AsyncImagePainter.State.Success) {
+                        // Keep the outgoing image fully opaque underneath until the new image is ready.
+                        incomingAlpha.animateTo(1f, animationSpec = tween(1800, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                        displayedIndex = wallpaperIndex
+                    }
+                }
+            }
+
+            val progress = if (kenBurnsEnabled) kenBurnsProgress.value else 0f
+            val direction = if (wallpaperIndex % 2 == 0) 1f else -1f
+            val scale = 1f + (kenBurnsZoom - 1f) * progress
+            AsyncImage(
+                model = wallpapers[displayedIndex].url,
+                contentDescription = wallpapers[displayedIndex].title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            if (wallpaperIndex != displayedIndex) {
+                Image(
+                    painter = incomingPainter,
+                    contentDescription = wallpapers[wallpaperIndex].title,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = incomingAlpha.value
                         scaleX = scale
                         scaleY = scale
                         translationX = size.width * .012f * progress * direction
