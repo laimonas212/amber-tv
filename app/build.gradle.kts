@@ -14,6 +14,16 @@ android {
         versionCode = 9
         versionName = "0.9.0"
     }
+    buildTypes {
+        release {
+            // Release build = non-debuggable + R8 shrinking. Much faster cold start than the debug APK.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Signed with the debug key so `adb install` works without setting up a keystore.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

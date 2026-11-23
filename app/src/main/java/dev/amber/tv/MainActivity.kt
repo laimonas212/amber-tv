@@ -55,6 +55,17 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.composed
+import kotlin.math.abs
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -290,9 +301,11 @@ private fun themedAppIcon(context: Context, app: InstalledTvApp): Drawable? {
     val pack = currentIconPack(context).takeIf { it.isNotBlank() } ?: return null
     return runCatching {
         val res = context.packageManager.getResourcesForApplication(pack)
-        val xml = res.assets.open("appfilter.xml").bufferedReader().use { it.readText() }
-        val entries = Regex("""<item\s+component="ComponentInfo\{([^}]+)}"\s+drawable="([^"]+)"\s*/>""", RegexOption.DOT_MATCHES_ALL)
-            .findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        val entries = iconPackEntries.getOrPut(pack) {
+            val xml = res.assets.open("appfilter.xml").bufferedReader().use { it.readText() }
+            Regex("""<item\s+component="ComponentInfo\{([^}]+)}"\s+drawable="([^"]+)"\s*/>""", RegexOption.DOT_MATCHES_ALL)
+                .findAll(xml).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        }
         val exact = app.packageName + "/" + app.activityName
         val name = entries.firstOrNull { it.first == exact || it.first == "/" + app.activityName }?.second
             ?: entries.firstOrNull { it.first.startsWith(app.packageName + "/") }?.second
@@ -302,7 +315,9 @@ private fun themedAppIcon(context: Context, app: InstalledTvApp): Drawable? {
     }.getOrNull()
 }
 private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveBackground: Boolean, size: Int = 160): Bitmap {
-    val drawable = themedAppIcon(context, app) ?: app.icon
+    val baseDrawable = themedAppIcon(context, app) ?: app.icon
+    // Draw from a private copy so background icon rendering never races with other screens sharing the Drawable.
+    val drawable = baseDrawable.constantState?.newDrawable()?.mutate() ?: baseDrawable
     val iconDrawable = if (removeAdaptiveBackground && drawable is AdaptiveIconDrawable) drawable.foreground else drawable
     val sourceSize = size * 2
     val source = Bitmap.createBitmap(sourceSize, sourceSize, Bitmap.Config.ARGB_8888)
@@ -329,6 +344,114 @@ private fun appIconBitmap(context: Context, app: InstalledTvApp, removeAdaptiveB
     outCanvas.drawBitmap(cropped,null,dest,android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
     return output
 }
+// ---------------------------------------------------------------------------------------------
+// Icon cache + async icon rendering: app icons are rendered off the main thread and cached, so the
+// Home screen can draw its first frame without waiting for PackageManager / bitmap work.
+// ---------------------------------------------------------------------------------------------
+private val iconPackEntries = java.util.concurrent.ConcurrentHashMap<String, List<Pair<String, String>>>()
+private val appIconCache = android.util.LruCache<String, ImageBitmap>(128)
+private val EmptyIconBitmap: ImageBitmap by lazy { ImageBitmap(1, 1) }
+
+private fun appIconKey(app: InstalledTvApp, removeBackground: Boolean, pack: String, size: Int) =
+    "${app.packageName}|$removeBackground|$pack|$size"
+
+private fun cachedAppIcon(context: Context, app: InstalledTvApp, removeBackground: Boolean, size: Int): ImageBitmap {
+    val key = appIconKey(app, removeBackground, currentIconPack(context), size)
+    appIconCache.get(key)?.let { return it }
+    return appIconBitmap(context, app, removeBackground, size).asImageBitmap().also { appIconCache.put(key, it) }
+}
+
+@Composable
+private fun rememberAppIcon(app: InstalledTvApp, removeBackground: Boolean, size: Int): ImageBitmap {
+    val context = LocalContext.current
+    val key = appIconKey(app, removeBackground, currentIconPack(context), size)
+    val state = produceState(initialValue = appIconCache.get(key) ?: EmptyIconBitmap, key) {
+        val hit = appIconCache.get(key)
+        value = hit ?: withContext(Dispatchers.Default) { cachedAppIcon(context, app, removeBackground, size) }
+    }
+    return state.value
+}
+
+// ---------------------------------------------------------------------------------------------
+// Liquid motion helpers
+// ---------------------------------------------------------------------------------------------
+/** Springy focus scale with a slight overshoot, so focus changes feel fluid instead of linear. */
+private fun Modifier.liquidFocusScale(focusedScale: Float): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    val animated by animateFloatAsState(
+        targetValue = if (focused) focusedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.52f, stiffness = 420f),
+        label = "liquid-focus-scale"
+    )
+    this.onFocusChanged { focused = it.hasFocus }.graphicsLayer { scaleX = animated; scaleY = animated }
+}
+
+@Composable
+private fun LiquidSwitch(checked: Boolean) {
+    val palette = LocalAmberPalette.current
+    val progress by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 320f),
+        label = "liquid-switch"
+    )
+    Box(
+        Modifier.width(58.dp).height(32.dp).clip(RoundedCornerShape(50))
+            .background(lerp(palette.text.copy(alpha = .18f), palette.accent, progress.coerceIn(0f, 1f)))
+    ) {
+        Box(Modifier.padding(4.dp).offset(x = 26.dp * progress).size(24.dp).clip(CircleShape).background(Color.White))
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SettingsRailItem(label: String, glyph: String, selected: Boolean, onFocus: () -> Unit) {
+    val palette = LocalAmberPalette.current
+    TvSurface(
+        onClick = {},
+        modifier = Modifier.fillMaxWidth().height(60.dp).onFocusChanged { if (it.hasFocus) onFocus() }.liquidFocusScale(1.04f),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(20.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) palette.accent.copy(alpha = .16f) else Color.Transparent,
+            focusedContainerColor = palette.focus
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+    ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(glyph, color = if (selected) palette.accent else palette.text.copy(alpha = .75f), fontSize = 20.sp)
+            Text(label, color = palette.text, fontSize = 17.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SettingsGlassRow(title: String, value: String, hint: String, glyph: String, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val palette = LocalAmberPalette.current
+    TvSurface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(84.dp).liquidFocusScale(1.02f),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(24.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = palette.text.copy(alpha = .07f), focusedContainerColor = palette.focus),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+    ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Box(Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(palette.accent.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
+                Text(glyph, color = palette.accent, fontSize = 20.sp)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = palette.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(hint, color = palette.mutedText, fontSize = 12.sp, maxLines = 1)
+            }
+            if (trailing != null) trailing() else Text(value, color = palette.text.copy(alpha = .9f), fontSize = 15.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(title: String, hint: String, glyph: String, checked: Boolean, onToggle: () -> Unit) {
+    SettingsGlassRow(title, if (checked) "On" else "Off", hint, glyph, onClick = onToggle, trailing = { LiquidSwitch(checked) })
+}
+
 private enum class Screen { HOME, SETTINGS, WALLPAPERS, AMBIENT, LAUNCHER, ALL_APPS, MANAGE_DOCK }
 private data class AmberPalette(val surface: Color, val focus: Color, val accent: Color, val border: Color, val text: Color, val mutedText: Color)
 private val LocalAmberPalette = androidx.compose.runtime.staticCompositionLocalOf { AmberPalette(Color(0xB31A242B), Color(0xB34C6578), Color(0xFF78B7FF), Color(0x55FFFFFF), Color.White, Color.White.copy(alpha = .58f)) }
@@ -382,14 +505,16 @@ private fun AmberHome() {
     val surfaceColors = listOf(Color(0xFF17232C),Color(0xFF101820),Color(0xFF25212F),Color(0xFF202A24),Color(0xFF282828),Color(0xFF352432),Color(0xFF382F1D),Color(0xFF3A2925),Color(0xFF29233A),Color(0xFF263329))
     val glassSurface = if (themeMode == 1) Color(0xDDEEF2F6) else surfaceColors[surfaceChoice].copy(alpha = .78f)
     val glassFocus = accentColors[accentChoice].copy(alpha = if (themeMode == 1) .34f else .30f)
-    val apps = remember(context) { loadInstalledTvApps(context.packageManager) }
+    // App discovery + icon rendering run off the main thread; the splash stays up until the dock icons are ready.
+    var apps by remember { mutableStateOf<List<InstalledTvApp>>(emptyList()) }
+    var appsLoaded by remember { mutableStateOf(false) }
     var screen by remember { mutableStateOf(Screen.HOME) }
     var iconMode by remember { mutableIntStateOf(prefs.getInt(KEY_ICON_MODE, if (prefs.getBoolean(KEY_MONO, false)) 1 else 0).coerceIn(0, 2)) }
     val mono = iconMode != 0
     var removeIconBackground by remember { mutableStateOf(prefs.getBoolean(KEY_ICON_NO_BG, false)) }
     var iconPackPackage by remember { mutableStateOf(prefs.getString(KEY_ICON_PACK, "") ?: "") }
     var showIconPackPicker by remember { mutableStateOf(false) }
-    val installedIconPacks = remember(context) { loadInstalledIconPacks(context.packageManager) }
+    var installedIconPacks by remember { mutableStateOf<List<InstalledIconPack>>(emptyList()) }
     var fontChoice by remember { mutableIntStateOf(prefs.getInt(KEY_FONT, 0)) }
     var wallpaperItems by remember {
         mutableStateOf(runCatching { parseWallpaperCatalog(prefs.getString(KEY_WALLPAPER_CACHE, null).orEmpty()) }.getOrDefault(emptyList()))
@@ -411,6 +536,8 @@ private fun AmberHome() {
     var movingDockPackage by remember { mutableStateOf<String?>(null) }
     var showAddDockDialog by remember { mutableStateOf(false) }
     val dockListState = rememberLazyListState()
+    // Jelly "wobble" that is kicked on every focus move and settles with a low-damping spring.
+    val dockLiquid = remember { Animatable(0f) }
     var lastDockFocusedIndex by remember { mutableIntStateOf(-1) }
     var dockFocusedIndex by remember { mutableIntStateOf(-1) }
     var dockScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -434,7 +561,24 @@ private fun AmberHome() {
         onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
     var dock by remember {
-        mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: apps.map { it.packageName })
+        mutableStateOf(prefs.getString(KEY_DOCK, null)?.split("|")?.filter(String::isNotBlank) ?: emptyList())
+    }
+    LaunchedEffect(context) {
+        val loaded = withContext(Dispatchers.Default) {
+            runCatching { loadInstalledTvApps(context.packageManager) }.getOrDefault(emptyList())
+        }
+        if (prefs.getString(KEY_DOCK, null) == null) dock = loaded.map { it.packageName }
+        apps = loaded
+        // Pre-render the dock icons in the background so the first Home frame already has them.
+        val warmIds = dock.ifEmpty { loaded.map { it.packageName } }.take(14).toSet()
+        val noBackground = removeIconBackground
+        withContext(Dispatchers.Default) {
+            loaded.filter { it.packageName in warmIds }.forEach { runCatching { cachedAppIcon(context, it, noBackground, 160) } }
+        }
+        appsLoaded = true
+        installedIconPacks = withContext(Dispatchers.Default) {
+            runCatching { loadInstalledIconPacks(context.packageManager) }.getOrDefault(emptyList())
+        }
     }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     var splashVisible by remember { mutableStateOf(true) }
@@ -467,7 +611,9 @@ private fun AmberHome() {
             weather = null
         }
     }
-    LaunchedEffect(Unit) { delay(1800); splashVisible = false }
+    // Dismiss the splash as soon as the apps are ready (was a fixed 1.8 s delay); hard cap as a safety net.
+    LaunchedEffect(appsLoaded) { if (appsLoaded) { delay(450); splashVisible = false } }
+    LaunchedEffect(Unit) { delay(6000); splashVisible = false }
     // The web catalog is the only wallpaper source. Keep its last successful copy as an offline cache.
     LaunchedEffect(wakeRefreshTick) {
         while (true) {
@@ -506,8 +652,8 @@ private fun AmberHome() {
         AnimatedContent(
             targetState = screen,
             transitionSpec = {
-                (fadeIn(tween(240, easing = FastOutSlowInEasing)) + slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { it / 22 }) togetherWith
-                    (fadeOut(tween(150)) + slideOutHorizontally(tween(190)) { -it / 28 })
+                (fadeIn(tween(260, easing = FastOutSlowInEasing)) + scaleIn(initialScale = .94f, animationSpec = spring(dampingRatio = .72f, stiffness = 260f))) togetherWith
+                    (fadeOut(tween(160)) + scaleOut(targetScale = 1.03f, animationSpec = tween(200, easing = FastOutSlowInEasing)))
             },
             label = "amber-screen-transition"
         ) { activeScreen ->
@@ -578,6 +724,7 @@ private fun AmberHome() {
                             items(dockApps, key = { it.packageName }) { app ->
                                 val index = dock.indexOf(app.packageName)
                                 AppDockItem(app, index, iconMode, removeIconBackground, font, dockWiggle, showAppNames,
+                                    liquid = { dockLiquid.value }, listState = dockListState,
                                     isMoving = movingDockPackage == app.packageName,
                                     onLongPress = { dockActionPackage = app.packageName },
                                     onRemove = { saveDock(dock - app.packageName); dockActionPackage = null },
@@ -585,6 +732,11 @@ private fun AmberHome() {
                                     onFocused = {
                                         val movingRight = lastDockFocusedIndex < 0 || index > lastDockFocusedIndex
                                         lastDockFocusedIndex = index
+                                        scope.launch {
+                                            val kick = (dockLiquid.value + if (movingRight) .75f else -.75f).coerceIn(-1.2f, 1.2f)
+                                            dockLiquid.snapTo(kick)
+                                            dockLiquid.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 110f))
+                                        }
                                         dockScrollJob?.cancel()
                                         dockScrollJob = scope.launch {
                                             // Move the row by one item only when the focused item reaches an edge.
@@ -597,9 +749,9 @@ private fun AmberHome() {
                                                 val leftEdge = margin
                                                 val step = (168f * density)
                                                 if (movingRight && item.offset + item.size > rightEdge) {
-                                                    dockListState.animateScrollBy(step)
+                                                    dockListState.animateScrollBy(step, spring(dampingRatio = 0.82f, stiffness = 240f))
                                                 } else if (!movingRight && item.offset < leftEdge) {
-                                                    dockListState.animateScrollBy(-step)
+                                                    dockListState.animateScrollBy(-step, spring(dampingRatio = 0.82f, stiffness = 240f))
                                                 }
                                             }
                                         }
@@ -694,7 +846,7 @@ private fun AmberHome() {
         renameProfile?.let { profile -> ProfileRenameDialog(profile.name, onSave = { newName -> profiles=profiles.map { if(it.id==profile.id) it.copy(name=newName) else it }; saveProfiles(context,profiles,activeProfileId); renameProfile=null }, onClose = { renameProfile=null }) }
         if (showAddDockDialog) AddDockDialog(apps, dock, iconMode, removeIconBackground, font,
             onApply = { selected -> saveDock(selected.map { it.packageName }) }, onClose = { showAddDockDialog = false })
-        if (splashVisible) AmberBootSplash()
+        AnimatedVisibility(visible = splashVisible, exit = fadeOut(tween(420))) { AmberBootSplash() }
     }
     }
 }
@@ -732,9 +884,9 @@ private fun AmberBootSplash() {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun ProfileHeaderButton(onClick:()->Unit) {
-    TvSurface(onClick,Modifier.size(48.dp),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+    TvSurface(onClick,Modifier.size(48.dp).liquidFocusScale(1.12f),shape=ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors=ClickableSurfaceDefaults.colors(containerColor=Color(0x18FFFFFF),focusedContainerColor=LocalAmberPalette.current.focus),
-        scale=ClickableSurfaceDefaults.scale(focusedScale=1.05f)) {
+        scale=ClickableSurfaceDefaults.scale(focusedScale=1f)) {
         Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) { Icon(Icons.Default.AccountCircle, "Profiles", tint=Color.White, modifier=Modifier.size(25.dp)) }
     }
 }
@@ -797,9 +949,9 @@ private fun ProfileRenameDialog(currentName:String,onSave:(String)->Unit,onClose
 
 @Composable
 private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    TvSurface(onClick, Modifier.size(48.dp), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+    TvSurface(onClick, Modifier.size(48.dp).liquidFocusScale(1.12f), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Color(0x18FFFFFF), focusedContainerColor = LocalAmberPalette.current.focus),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f)) {
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(25.dp)) }
     }
 }
@@ -898,29 +1050,78 @@ private fun WallpaperLibraryScreen(
 @Composable
 private fun SettingsScreen(iconMode: Int, removeIconBackground: Boolean, fontChoice: Int, wallpaperChoice: Int, wallpaperCount: Int, showAppNames: Boolean, themeMode: Int, accentChoice: Int, surfaceChoice: Int, onTheme: (Int) -> Unit, onAccent: (Int) -> Unit, onSurface: (Int) -> Unit, onShowAppNames: (Boolean) -> Unit, showWeather: Boolean, onWeather: (Boolean) -> Unit, onIconMode: (Int) -> Unit, onIconBackground: (Boolean) -> Unit, iconPackName: String, onIconPack: () -> Unit, onFont: (Int) -> Unit, onWallpaper: () -> Unit, onAmbient: () -> Unit, onSystem: () -> Unit, onDefaultLauncher: () -> Unit, desktopKenBurns: Boolean, desktopKenBurnsSpeed: Float, desktopKenBurnsZoom: Float, dockNoise: Int, onDockNoise: (Int) -> Unit, onDesktopKenBurns: (Boolean) -> Unit, onDesktopKenBurnsSpeed: (Float) -> Unit, onDesktopKenBurnsZoom: (Float) -> Unit, onBack: () -> Unit) {
     var choiceDialog by remember { mutableStateOf<SettingsChoice?>(null) }
-    Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 26.dp)) {
-        ScreenTitle("Settings", onBack)
-        Text("Make Amber TV feel like yours", color = Color.White.copy(alpha = .68f), fontSize = 16.sp, modifier = Modifier.padding(start = 66.dp, top = 2.dp, bottom = 22.dp))
-        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { SettingsTile("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus")[iconMode], "Choose how app icons look", "◈") { choiceDialog = SettingsChoice("Icon style", listOf("Full color", "Monochrome", "Mono · color on focus"), iconMode, onIconMode) } }
-            item { SettingsTile("Icon background", if (removeIconBackground) "Adaptive background off" else "Original app icon", "Remove adaptive icon background where supported", "◉") { onIconBackground(!removeIconBackground) } }
-            item { SettingsTile("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onIconPack) }
-            item { SettingsTile("App names", if (showAppNames) "Visible" else "Hidden · larger icons", "Show or hide names below Dock icons", "Aa") { onShowAppNames(!showAppNames) } }
-            item { SettingsTile("Desktop Ken Burns", if (desktopKenBurns) "On · slow wallpaper motion" else "Off", "Subtle zoom and pan on the Home background", "◫") { onDesktopKenBurns(!desktopKenBurns) } }
-            if (desktopKenBurns) {
-                item { SettingsTile("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×")[listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)], "Choose how quickly the wallpaper moves", "↗") { choiceDialog = SettingsChoice("Desktop motion speed", listOf("0.5×","0.75×","1.0×","1.25×","1.5×"), listOf(.5f,.75f,1f,1.25f,1.5f).indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)) { onDesktopKenBurnsSpeed(listOf(.5f,.75f,1f,1.25f,1.5f)[it]) } } }
-                item { SettingsTile("Desktop zoom", "${((desktopKenBurnsZoom - 1f) * 100).toInt()}%", "Choose the amount of zoom", "⊕") { choiceDialog = SettingsChoice("Desktop zoom", listOf("2%","4%","6%","8%","10%","12%","15%"), listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f).indexOf(desktopKenBurnsZoom).coerceAtLeast(0)) { onDesktopKenBurnsZoom(listOf(1.02f,1.04f,1.06f,1.08f,1.10f,1.12f,1.15f)[it]) } } }
+    var category by remember { mutableIntStateOf(0) }
+    val palette = LocalAmberPalette.current
+    val categories = listOf("Appearance" to "✦", "Dock & icons" to "◈", "Wallpaper & motion" to "▧", "Ambient & weather" to "◷", "System" to "⚙")
+    val iconModes = listOf("Full color", "Monochrome", "Mono · color on focus")
+    val fonts = listOf("Sans Serif", "Serif", "Monospace")
+    val accents = listOf("Ice blue", "Lavender", "Mint", "Amber", "Rose", "Neutral", "Pink", "Soft yellow", "Peach", "Lilac", "Sage")
+    val tints = listOf("Deep blue", "Midnight", "Plum", "Forest", "Graphite", "Berry", "Honey", "Rosewood", "Violet", "Sage")
+    val speeds = listOf(.5f, .75f, 1f, 1.25f, 1.5f)
+    val speedLabels = listOf("0.5×", "0.75×", "1.0×", "1.25×", "1.5×")
+    val zooms = listOf(1.02f, 1.04f, 1.06f, 1.08f, 1.10f, 1.12f, 1.15f)
+    val zoomLabels = listOf("2%", "4%", "6%", "8%", "10%", "12%", "15%")
+    val grainLabels = listOf("Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%")
+    val paneShape = RoundedCornerShape(32.dp)
+    Row(
+        Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 30.dp, bottom = 30.dp),
+        horizontalArrangement = Arrangement.spacedBy(30.dp)
+    ) {
+        Column(Modifier.width(310.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ScreenTitle("Settings", onBack)
+            Text("Make Amber TV feel like yours", color = palette.text.copy(alpha = .6f), fontSize = 14.sp, modifier = Modifier.padding(start = 66.dp, bottom = 14.dp))
+            categories.forEachIndexed { index, entry ->
+                SettingsRailItem(entry.first, entry.second, selected = category == index, onFocus = { category = index })
             }
-            item { SettingsTile("Dock grain", if (dockNoise == 0) "Off" else "$dockNoise% · subtle texture", "Adjust the fine noise texture on the frosted-glass Dock", "▦") { choiceDialog = SettingsChoice("Dock grain", listOf("Off", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"), (dockNoise / 10).coerceIn(0, 10)) { onDockNoise(if (it == 0) 0 else it * 10) } } }
-            item { SettingsTile("Typography", listOf("Sans Serif","Serif","Monospace")[fontChoice], "Change the system typeface", "Aa") { choiceDialog = SettingsChoice("Typography", listOf("Sans Serif","Serif","Monospace"), fontChoice, onFont) } }
-            item { SettingsTile("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount backgrounds", "Online library · choose your look", "▧", onWallpaper) }
-            item { SettingsTile("Amber Ambient", "Screensaver · customize", "Clock, date, slideshow, OLED dimming", "◷", onAmbient) }
-            item { SettingsTile("Weather", if (showWeather) "On · Vilnius" else "Off", "Current conditions on Home", "☼") { onWeather(!showWeather) } }
-            item { SettingsTile("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐") { choiceDialog = SettingsChoice("Theme", listOf("Dark", "Light"), themeMode, onTheme) } }
-            item { SettingsTile("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage")[accentChoice], "Change focus and highlight colour", "✦") { choiceDialog = SettingsChoice("Accent colour", listOf("Ice blue","Lavender","Mint","Amber","Rose","Neutral","Pink","Soft yellow","Peach","Lilac","Sage"), accentChoice, onAccent) } }
-            item { SettingsTile("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage")[surfaceChoice], "Change translucent surface tone", "◧") { choiceDialog = SettingsChoice("Glass tint", listOf("Deep blue","Midnight","Plum","Forest","Graphite","Berry","Honey","Rosewood","Violet","Sage"), surfaceChoice, onSurface) } }
-            item { SettingsTile("Default launcher", "Choose Amber TV or Google TV", "Change which Home app opens when you press Home", "⌂", onDefaultLauncher) }
-            item { SettingsTile("Device Settings", "Network · Display · System", "Android preferences", "⚙", onSystem) }
+        }
+        Box(
+            Modifier.weight(1f).fillMaxHeight().clip(paneShape)
+                .background(palette.surface.copy(alpha = .46f))
+                .border(1.dp, palette.border.copy(alpha = .5f), paneShape)
+        ) {
+            AnimatedContent(
+                targetState = category,
+                transitionSpec = {
+                    val dir = if (targetState > initialState) 1 else -1
+                    (fadeIn(tween(220)) + slideInVertically(animationSpec = spring(dampingRatio = .78f, stiffness = 300f)) { fullHeight -> fullHeight / 14 * dir }) togetherWith
+                        fadeOut(tween(120))
+                },
+                label = "settings-pane"
+            ) { current ->
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when (current) {
+                        0 -> {
+                            item { SettingsGlassRow("Theme", if (themeMode == 0) "Dark" else "Light", "Switch light and dark appearance", "◐", onClick = { choiceDialog = SettingsChoice("Theme", listOf("Dark", "Light"), themeMode, onTheme) }) }
+                            item { SettingsGlassRow("Accent colour", accents[accentChoice.coerceIn(accents.indices)], "Change focus and highlight colour", "✦", onClick = { choiceDialog = SettingsChoice("Accent colour", accents, accentChoice, onAccent) }) }
+                            item { SettingsGlassRow("Glass tint", tints[surfaceChoice.coerceIn(tints.indices)], "Change translucent surface tone", "◧", onClick = { choiceDialog = SettingsChoice("Glass tint", tints, surfaceChoice, onSurface) }) }
+                            item { SettingsGlassRow("Typography", fonts[fontChoice.coerceIn(fonts.indices)], "Change the system typeface", "Aa", onClick = { choiceDialog = SettingsChoice("Typography", fonts, fontChoice, onFont) }) }
+                        }
+                        1 -> {
+                            item { SettingsGlassRow("Icon style", iconModes[iconMode.coerceIn(iconModes.indices)], "Choose how app icons look", "◈", onClick = { choiceDialog = SettingsChoice("Icon style", iconModes, iconMode, onIconMode) }) }
+                            item { SettingsToggleRow("Hide icon background", "Remove adaptive icon background where supported", "◉", removeIconBackground) { onIconBackground(!removeIconBackground) } }
+                            item { SettingsGlassRow("Icon pack", iconPackName, "Use an independently installed icon pack", "◈", onClick = onIconPack) }
+                            item { SettingsToggleRow("App names", "Show names below Dock icons (off = larger icons)", "Aa", showAppNames) { onShowAppNames(!showAppNames) } }
+                            item { SettingsGlassRow("Dock grain", if (dockNoise == 0) "Off" else "$dockNoise%", "Fine noise texture on the frosted-glass Dock", "▦", onClick = { choiceDialog = SettingsChoice("Dock grain", grainLabels, (dockNoise / 10).coerceIn(0, 10)) { onDockNoise(if (it == 0) 0 else it * 10) } }) }
+                        }
+                        2 -> {
+                            item { SettingsGlassRow("Wallpapers", "${wallpaperChoice + 1} of $wallpaperCount", "Online library · choose your look", "▧", onClick = onWallpaper) }
+                            item { SettingsToggleRow("Desktop Ken Burns", "Subtle zoom and pan on the Home background", "◫", desktopKenBurns) { onDesktopKenBurns(!desktopKenBurns) } }
+                            if (desktopKenBurns) {
+                                item { SettingsGlassRow("Motion speed", speedLabels[speeds.indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)], "Choose how quickly the wallpaper moves", "↗", onClick = { choiceDialog = SettingsChoice("Desktop motion speed", speedLabels, speeds.indexOf(desktopKenBurnsSpeed).coerceAtLeast(0)) { onDesktopKenBurnsSpeed(speeds[it]) } }) }
+                                item { SettingsGlassRow("Zoom amount", "${((desktopKenBurnsZoom - 1f) * 100).toInt()}%", "Choose the amount of zoom", "⊕", onClick = { choiceDialog = SettingsChoice("Desktop zoom", zoomLabels, zooms.indexOf(desktopKenBurnsZoom).coerceAtLeast(0)) { onDesktopKenBurnsZoom(zooms[it]) } }) }
+                            }
+                        }
+                        3 -> {
+                            item { SettingsGlassRow("Amber Ambient", "Customize", "Clock, date, slideshow, OLED dimming", "◷", onClick = onAmbient) }
+                            item { SettingsToggleRow("Weather", "Current conditions on Home · Vilnius", "☼", showWeather) { onWeather(!showWeather) } }
+                        }
+                        else -> {
+                            item { SettingsGlassRow("Default launcher", "Amber TV or Google TV", "Change which Home app opens when you press Home", "⌂", onClick = onDefaultLauncher) }
+                            item { SettingsGlassRow("Device Settings", "Network · Display · System", "Android preferences", "⚙", onClick = onSystem) }
+                        }
+                    }
+                }
+            }
         }
     }
     choiceDialog?.let { choice ->
@@ -1038,11 +1239,11 @@ private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: I
 @Composable
 private fun AppTile(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = rememberAppIcon(app, removeIconBackground, 160)
     var focused by remember { mutableStateOf(false) }
-    TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
+    TvSurface(onClick, Modifier.height(150.dp).fillMaxWidth().onFocusChanged { focused = it.isFocused }.liquidFocusScale(1.05f), shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(22.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = LocalAmberPalette.current.surface, focusedContainerColor = LocalAmberPalette.current.focus),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f)) {
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)) {
         Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Image(bitmap, app.label, Modifier.size(70.dp).clip(RoundedCornerShape(if (removeIconBackground) 17.dp else 17.dp)), contentScale = ContentScale.Fit,
                 colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)
@@ -1083,7 +1284,7 @@ private fun ManageDockScreen(apps: List<InstalledTvApp>, dock: List<String>, ico
 @Composable
 private fun AppListRow(app: InstalledTvApp, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onClick: () -> Unit) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, currentIconPack(context)) { appIconBitmap(context, app, removeIconBackground, 96).asImageBitmap() }
+    val bitmap = rememberAppIcon(app, removeIconBackground, 96)
     var focused by remember { mutableStateOf(false) }
     @OptIn(ExperimentalTvMaterial3Api::class)
     TvSurface(onClick, Modifier.fillMaxWidth().height(58.dp).onFocusChanged { focused = it.isFocused }, shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(13.dp)),
@@ -1194,7 +1395,7 @@ private fun AddDockDialog(
                 ) {
                     gridItems(apps, key = { it.packageName }) { app ->
                         val isSelected = app.packageName in selected
-                        val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 120).asImageBitmap() }
+                        val bitmap = rememberAppIcon(app, removeIconBackground, 120)
                         @OptIn(ExperimentalTvMaterial3Api::class)
                         TvSurface(
                             onClick = { selected = if (isSelected) selected - app.packageName else selected + app.packageName },
@@ -1241,9 +1442,9 @@ private fun AddDockDialog(
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit) {
+private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, wiggle: Boolean, showAppNames: Boolean, isMoving: Boolean, onLongPress: () -> Unit, onRemove: () -> Unit, onClick: () -> Unit, onFocused: () -> Unit, onMove: (Int) -> Unit, liquid: () -> Float, listState: LazyListState) {
     val context = LocalContext.current
-    val bitmap = remember(app.packageName, removeIconBackground, removeIconBackground) { appIconBitmap(context, app, removeIconBackground, 160).asImageBitmap() }
+    val bitmap = rememberAppIcon(app, removeIconBackground, 160)
     var focused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused, isMoving, itemIndex) {
@@ -1253,10 +1454,31 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
     var longPressJob by remember { mutableStateOf<Job?>(null) }
     var longPressTriggered by remember { mutableStateOf(false) }
     var suppressNextOkKeyUp by remember { mutableStateOf(false) }
-    Box(Modifier.width(132.dp).height(108.dp), contentAlignment = Alignment.TopEnd) {
+    Box(
+        Modifier.width(132.dp).height(108.dp).graphicsLayer {
+            // Liquid dock: a fisheye lift toward the centre of the visible row plus a squash-and-stretch wobble.
+            val info = listState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.key == app.packageName }
+            val l = liquid()
+            if (item != null) {
+                val half = (info.viewportEndOffset - info.viewportStartOffset) / 2f
+                val center = info.viewportStartOffset + half
+                val n = if (half > 0f) ((item.offset + item.size / 2f - center) / half).coerceIn(-1f, 1f) else 0f
+                val near = 1f - abs(n)
+                val lift = near * near
+                val base = 1f + 0.05f * lift
+                scaleX = base * (1f + 0.07f * abs(l))
+                scaleY = base * (1f - 0.04f * abs(l))
+                translationY = -4.dp.toPx() * lift
+                translationX = l * 16.dp.toPx() * (1f - 0.55f * abs(n))
+            }
+        },
+        contentAlignment = Alignment.TopEnd
+    ) {
         TvSurface({
             // OK is handled entirely in onPreviewKeyEvent to avoid a second click on key release.
         }, Modifier.fillMaxSize().bringIntoViewRequester(bringIntoViewRequester).onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+            .liquidFocusScale(1.06f)
             .graphicsLayer { if (isMoving) { scaleX = 1.045f; scaleY = 1.045f } }
             .onPreviewKeyEvent { event ->
                 val isOkKey = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -1300,7 +1522,7 @@ private fun AppDockItem(app: InstalledTvApp, itemIndex: Int, iconMode: Int, remo
                 containerColor = Color.Transparent,
                 focusedContainerColor = if (isMoving) Color.Transparent else Color(0x32FFFFFF)
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.045f)) {
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)) {
             Column(Modifier.fillMaxSize().padding(horizontal = 11.dp, vertical = if (showAppNames) 10.dp else 7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Image(bitmap, app.label, Modifier.size(if (showAppNames) 52.dp else 76.dp).clip(RoundedCornerShape(if (removeIconBackground) 18.dp else if (showAppNames) 13.dp else 19.dp)), contentScale = ContentScale.Fit,
                     colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused)) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null)

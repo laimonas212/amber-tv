@@ -44,6 +44,17 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Open Amber TV normally first, then verify app discovery and remote navigation. Do not disable or uninstall Google TV / Philips system packages during initial testing.
 
+## Release build (recommended for daily use)
+
+The debug APK is unminified and debuggable, so it starts much slower on the TV. For daily use build the release variant (R8 shrinking, non-debuggable, signed with the debug key so it installs without a keystore):
+
+```bash
+./gradlew :app:assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+GitHub Actions builds both `amber-tv-debug` and `amber-tv-release` artifacts. Note: Android only allows an in-place update when the signing key matches the installed app; if `adb install -r` reports a signature mismatch, uninstall the old build first.
+
 ## HOME testing and rollback
 
 Only after the app has been tested as a normal app:
