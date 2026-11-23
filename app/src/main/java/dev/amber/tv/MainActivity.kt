@@ -1178,6 +1178,66 @@ private fun SettingRow(title: String, value: String, hint: String, onClick: () -
     }
 }
 
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun HomeAppEntry(
+    app: InstalledTvApp, layout: Int, contentMode: Int, iconPosition: Int,
+    iconSize: Int, fontSize: Int, iconMode: Int, removeIconBackground: Boolean,
+    font: FontFamily, onClick: () -> Unit, onFocused: () -> Unit,
+    onLongPress: () -> Unit, onMove: (Int) -> Unit
+) {
+    val bitmap = rememberAppIcon(app, removeIconBackground, 160)
+    var focused by remember { mutableStateOf(false) }
+    val showIcon = contentMode != 2
+    val showText = contentMode != 0
+    val rowStyle = layout == 1
+    val shape = RoundedCornerShape(if (rowStyle) 18.dp else 24.dp)
+    TvSurface(
+        onClick,
+        modifier = (if (rowStyle) Modifier.fillMaxWidth().height((iconSize + 28).coerceAtLeast(66).dp) else Modifier.fillMaxWidth().height(100.dp))
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocused() }
+            .graphicsLayer {
+                val target = if (focused) 1.045f else 1f
+                scaleX = target; scaleY = target
+            },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            focusedContainerColor = Color(0x3AFFFFFF)
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+    ) {
+        val icon = @Composable {
+            if (showIcon) Image(
+                bitmap, app.label,
+                Modifier.size(iconSize.dp).clip(RoundedCornerShape(15.dp)),
+                contentScale = ContentScale.Fit,
+                colorFilter = if (iconMode == 1 || (iconMode == 2 && !focused))
+                    ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
+            )
+        }
+        val title = @Composable {
+            if (showText) Text(app.label, color = Color.White.copy(alpha = .96f),
+                fontSize = fontSize.sp, fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Medium,
+                fontFamily = font, maxLines = 1)
+        }
+        if (!rowStyle) {
+            Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                if (iconPosition == 0) { icon(); if (showIcon && showText) Spacer(Modifier.height(7.dp)); title() }
+                else { title(); if (showIcon && showText) Spacer(Modifier.height(7.dp)); icon() }
+            }
+        } else {
+            Row(Modifier.fillMaxSize().padding(horizontal = 17.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (iconPosition == 0) { icon(); title() } else { Spacer(Modifier.weight(1f)); title(); icon() }
+                if (iconPosition == 0) Spacer(Modifier.weight(1f))
+                if (!showIcon && !showText) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
 @Composable
 private fun AppListScreen(title: String, apps: List<InstalledTvApp>, iconMode: Int, removeIconBackground: Boolean, font: FontFamily, onBack: () -> Unit, onLaunch: (InstalledTvApp) -> Unit) {
     Column(Modifier.fillMaxSize().padding(start = 76.dp, end = 76.dp, top = 34.dp, bottom = 26.dp)) {
